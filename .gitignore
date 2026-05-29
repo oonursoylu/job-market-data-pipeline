@@ -1,0 +1,37 @@
+# Environment variables and secrets
+.env
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local data archives
+data/*
+!data/raw/
+data/raw/*
+!data/raw/.gitkeep
+
+# Database backups and exports
+backups/*
+!backups/.gitkeep
+
+# Generated reports
+reports/weekly/*
+!reports/weekly/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
