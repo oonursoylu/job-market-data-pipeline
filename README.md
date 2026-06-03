@@ -1,12 +1,12 @@
 # Germany Job Market Data Pipeline
 
-A Germany-first portfolio data engineering project for collecting, storing, modeling, and analyzing job postings using Python, PostgreSQL, dbt, Airflow, and Streamlit.
+A Germany-first portfolio data engineering project for collecting, archiving, loading, modeling, and analyzing job postings using Python, PostgreSQL, dbt, Airflow, and Streamlit.
 
 ## Project Goal
 
-The goal of this project is to build a recurring batch data pipeline that collects job postings from an external API, stores raw data in PostgreSQL, models the data with dbt, applies data quality checks, and presents market insights through a dashboard and weekly reports.
+The goal of this project is to build a recurring batch data pipeline that collects job postings from an external API, stores raw data locally and in PostgreSQL, models the data with dbt, applies data quality checks, and presents market insights through a dashboard and weekly reports.
 
-The first MVP focuses on Germany and a small set of data-focused roles:
+The project starts with Germany and a small set of data-focused roles:
 
 - Data Engineer
 - Analytics Engineer
@@ -14,35 +14,139 @@ The first MVP focuses on Germany and a small set of data-focused roles:
 
 ## Why Germany First?
 
-Germany is the initial focus because it keeps the project scope manageable while staying close to the target job market. Starting with one country makes it easier to validate the ingestion logic, database design, dbt models, and dashboard before expanding to other markets.
+Germany is the initial focus because it keeps the project scope manageable while staying close to the target job market. Starting with one country makes it easier to validate the ingestion logic, raw archive design, database schema, dbt models, and dashboard before expanding to other markets.
 
 ## Why PostgreSQL?
 
-PostgreSQL is used as the main database because it supports practical data engineering patterns such as raw data storage, JSONB columns, upserts, indexing, backups, and exports. It also keeps the project local, reproducible, and sustainable without relying on cloud trials or billing.
+PostgreSQL is used as the main database because it supports practical data engineering patterns such as raw data storage, JSONB columns, duplicate handling, indexing, backups, and exports. It also keeps the project local, reproducible, and sustainable without relying on cloud trials or billing.
+
+## Current MVP Pipeline
+
+The current working MVP covers the raw ingestion and loading layer:
+
+```text
+Adzuna API
+-> Python extract script
+-> Local JSONL raw archive
+-> PostgreSQL raw.job_postings table
+```
+
+The MVP currently supports:
+
+- fetching real job postings from the Adzuna API
+- writing raw API job records to local JSONL archive files
+- reading JSONL archive files back into Python
+- mapping Adzuna job fields into PostgreSQL table columns
+- loading records into PostgreSQL
+- skipping duplicates with `ON CONFLICT DO NOTHING`
+
+## Current Validation
+
+The MVP has been tested with:
+
+```text
+Country: Germany
+Search role: data_engineer
+Pages fetched: 2
+Results per page: 50
+Total records fetched: 100
+Total JSONL records written: 100
+Total PostgreSQL records inserted: 100
+Duplicate reload result: 0 inserted, 100 skipped
+```
+
+## Project Structure
+
+```text
+src/
+  extract/
+    adzuna_client.py
+    archive_writer.py
+    run_adzuna_extract.py
+  load/
+    jsonl_reader.py
+    job_mapper.py
+    postgres_loader.py
+    run_postgres_load.py
+  transform/
+  reports/
+  utils/
+sql/
+  001_create_raw_schema.sql
+data/
+  raw/
+reports/
+  weekly/
+docs/
+  screenshots/
+  linkedin_posts/
+```
+
+## Environment Variables
+
+Create a local `.env` file based on `.env.example`.
+
+Required values:
+
+```text
+ADZUNA_APP_ID=
+ADZUNA_APP_KEY=
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=job_market
+POSTGRES_USER=job_market_user
+POSTGRES_PASSWORD=
+DEFAULT_COUNTRY=de
+DEFAULT_RESULTS_PER_PAGE=50
+DEFAULT_MAX_PAGES=2
+```
+
+The real `.env` file is ignored by Git.
+
+## How To Run
+
+Run the extract step:
+
+```powershell
+python src\extract\run_adzuna_extract.py
+```
+
+Run the PostgreSQL load step:
+
+```powershell
+python src\load\run_postgres_load.py
+```
+
+Check the raw table count:
+
+```powershell
+python -c "from src.load.postgres_loader import get_connection; conn = get_connection(); cur = conn.cursor(); cur.execute('SELECT COUNT(*) FROM raw.job_postings'); print(cur.fetchone()[0]); cur.close(); conn.close()"
+```
 
 ## Planned Pipeline Flow
 
-Adzuna API  
--> Python ingestion  
--> Local JSONL raw archive  
--> PostgreSQL raw schema  
--> dbt staging, intermediate, and mart models  
--> data quality and freshness checks  
--> Airflow orchestration  
--> Streamlit dashboard  
+```text
+Adzuna API
+-> Python ingestion
+-> Local JSONL raw archive
+-> PostgreSQL raw schema
+-> dbt staging, intermediate, and mart models
+-> data quality and freshness checks
+-> Airflow orchestration
+-> Streamlit dashboard
 -> weekly Markdown report
+```
 
-## MVP Scope
+## Next Steps
 
-The first successful MVP will:
-
-- collect 100-300 real job postings for Germany
-- cover Data Engineer, Analytics Engineer, and AI Engineer roles
-- save raw API responses as local JSONL files
-- load normalized records into PostgreSQL
-- prevent duplicates with an upsert strategy
-- report how many records were fetched, inserted, updated, or skipped
+- extend extract runs to all target roles
+- parameterize country, role, date, page count, and results per page
+- add dbt staging models on top of `raw.job_postings`
+- add data quality and freshness checks
+- add Airflow orchestration
+- build Streamlit dashboard
+- generate weekly Markdown reports
 
 ## Project Status
 
-Current stage: repository and environment setup.
+Current stage: working MVP raw ingestion and PostgreSQL load completed.
