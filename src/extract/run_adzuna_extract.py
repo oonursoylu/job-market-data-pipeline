@@ -2,24 +2,35 @@ from adzuna_client import fetch_jobs
 from archive_writer import write_jobs_to_jsonl
 
 
-def run_extract(country: str, search_role: str, page: int = 1, results_per_page: int = 5) -> None:
-    data = fetch_jobs(
-        country=country,
-        search_role=search_role,
-        page=page,
-        results_per_page=results_per_page,
-    )
+def run_extract(country: str, search_role: str, max_pages: int = 2, results_per_page: int = 50) -> None:
+    all_jobs = []
+    total_matching_jobs = None
 
-    jobs = data.get("results", [])
+    for page in range(1, max_pages + 1):
+        data = fetch_jobs(
+            country=country,
+            search_role=search_role,
+            page=page,
+            results_per_page=results_per_page,
+        )
+
+        if total_matching_jobs is None:
+            total_matching_jobs = data.get("count")
+
+        jobs = data.get("results", [])
+        all_jobs.extend(jobs)
+
+        print(f"Page {page}: fetched {len(jobs)} jobs")
+
     archive_path = write_jobs_to_jsonl(
-        jobs=jobs,
+        jobs=all_jobs,
         country=country,
         search_role=search_role,
     )
 
     print(f"Search role: {search_role}")
-    print(f"Total matching jobs reported by API: {data.get('count')}")
-    print(f"Jobs returned in this request: {len(jobs)}")
+    print(f"Total matching jobs reported by API: {total_matching_jobs}")
+    print(f"Total jobs fetched in this run: {len(all_jobs)}")
     print(f"Wrote archive file: {archive_path}")
 
 
@@ -27,6 +38,6 @@ if __name__ == "__main__":
     run_extract(
         country="de",
         search_role="data_engineer",
-        page=1,
-        results_per_page=5,
+        max_pages=2,
+        results_per_page=50,
     )
