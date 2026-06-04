@@ -35,9 +35,17 @@ def run_extract(country: str, search_role: str, max_pages: int = 2, results_per_
 
 
 if __name__ == "__main__":
-    run_extract(
-        country="de",
-        search_role="data_engineer",
-        max_pages=2,
-        results_per_page=50,
-    )
+    search_roles = [
+        "data_engineer",
+        "analytics_engineer",
+        "ai_engineer",
+    ]
+
+    for search_role in search_roles:
+        print(f"\nStarting extract for role: {search_role}")
+        run_extract(
+            country="de",
+            search_role=search_role,
+            max_pages=2,
+            results_per_page=50,
+        )
