@@ -34,26 +34,32 @@ Adzuna API
 The MVP currently supports:
 
 - fetching real job postings from the Adzuna API
+- running extract jobs for Data Engineer, Analytics Engineer, and AI Engineer roles
 - writing raw API job records to local JSONL archive files
 - reading JSONL archive files back into Python
 - mapping Adzuna job fields into PostgreSQL table columns
 - loading records into PostgreSQL
-- skipping duplicates with `ON CONFLICT DO NOTHING`
+- keeping unique job postings in PostgreSQL with `ON CONFLICT DO NOTHING`
 
 ## Current Validation
 
-The MVP has been tested with:
+The MVP has been tested with multi-role extracts and PostgreSQL loads:
 
 ```text
 Country: Germany
-Search role: data_engineer
+Search roles: data_engineer, analytics_engineer, ai_engineer
 Pages fetched: 2
 Results per page: 50
-Total records fetched: 100
-Total JSONL records written: 100
-Total PostgreSQL records inserted: 100
-Duplicate reload result: 0 inserted, 100 skipped
+Extract date: 2026-06-04
+JSONL records written per role: 100
+Total JSONL records written: 300
+PostgreSQL records before multi-role load: 100
+New PostgreSQL records inserted: 206
+Duplicate records skipped: 94
+PostgreSQL records after multi-role load: 306
 ```
+
+The `raw.job_postings` table currently behaves as a unique job posting store. Duplicate Adzuna jobs are skipped based on `(source, job_id)`. Daily role-level observations will be modeled separately in a future raw observation table.
 
 ## Project Structure
 
@@ -139,7 +145,7 @@ Adzuna API
 
 ## Next Steps
 
-- extend extract runs to all target roles
+- add a raw job posting observations table for daily role-level sightings
 - parameterize country, role, date, page count, and results per page
 - add dbt staging models on top of `raw.job_postings`
 - add data quality and freshness checks
@@ -149,4 +155,4 @@ Adzuna API
 
 ## Project Status
 
-Current stage: working MVP raw ingestion and PostgreSQL load completed.
+Current stage: working multi-role MVP raw ingestion and PostgreSQL load completed.
