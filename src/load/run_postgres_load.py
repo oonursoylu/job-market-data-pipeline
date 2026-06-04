@@ -3,7 +3,7 @@ from pathlib import Path
 
 from job_mapper import map_adzuna_job
 from jsonl_reader import read_jsonl
-from postgres_loader import insert_job_postings
+from postgres_loader import insert_job_posting_observations, insert_job_postings
 
 
 def run_load(file_path: str | Path, search_role: str, search_country: str, extract_date: date) -> None:
@@ -21,11 +21,15 @@ def run_load(file_path: str | Path, search_role: str, search_country: str, extra
 
     inserted_count = insert_job_postings(mapped_jobs)
     duplicate_count = len(mapped_jobs) - inserted_count
+    observation_inserted_count = insert_job_posting_observations(mapped_jobs)
+    observation_duplicate_count = len(mapped_jobs) - observation_inserted_count
 
     print(f"Read records: {len(raw_jobs)}")
     print(f"Mapped records: {len(mapped_jobs)}")
     print(f"Inserted records: {inserted_count}")
     print(f"Skipped duplicates: {duplicate_count}")
+    print(f"Inserted observations: {observation_inserted_count}")
+    print(f"Skipped duplicate observations: {observation_duplicate_count}")
 
 
 if __name__ == "__main__":

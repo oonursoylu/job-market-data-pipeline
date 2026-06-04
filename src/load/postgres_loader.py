@@ -74,3 +74,39 @@ def insert_job_postings(jobs: list[dict]) -> int:
                 inserted_count += cursor.rowcount
 
     return inserted_count
+
+
+def insert_job_posting_observations(jobs: list[dict]) -> int:
+    insert_sql = """
+        INSERT INTO raw.job_posting_observations (
+            source,
+            job_id,
+            search_role,
+            search_country,
+            extract_date
+        )
+        VALUES (
+            %(source)s,
+            %(job_id)s,
+            %(search_role)s,
+            %(search_country)s,
+            %(extract_date)s
+        )
+        ON CONFLICT (
+            source,
+            job_id,
+            search_country,
+            search_role,
+            extract_date
+        ) DO NOTHING;
+    """
+
+    inserted_count = 0
+
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            for job in jobs:
+                cursor.execute(insert_sql, job)
+                inserted_count += cursor.rowcount
+
+    return inserted_count
