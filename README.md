@@ -29,6 +29,7 @@ Adzuna API
 -> Python extract script
 -> Local JSONL raw archive
 -> PostgreSQL raw.job_postings table
+-> PostgreSQL raw.job_posting_observations table
 ```
 
 The MVP currently supports:
@@ -40,6 +41,7 @@ The MVP currently supports:
 - mapping Adzuna job fields into PostgreSQL table columns
 - loading records into PostgreSQL
 - keeping unique job postings in PostgreSQL with `ON CONFLICT DO NOTHING`
+- recording daily role-level sightings in `raw.job_posting_observations`
 
 ## Current Validation
 
@@ -57,9 +59,11 @@ PostgreSQL records before multi-role load: 100
 New PostgreSQL records inserted: 206
 Duplicate records skipped: 94
 PostgreSQL records after multi-role load: 306
+Job posting observations inserted: 300
+Duplicate observation reload result: 0 inserted, 300 skipped
 ```
 
-The `raw.job_postings` table currently behaves as a unique job posting store. Duplicate Adzuna jobs are skipped based on `(source, job_id)`. Daily role-level observations will be modeled separately in a future raw observation table.
+The `raw.job_postings` table behaves as a unique job posting store. Duplicate Adzuna jobs are skipped based on `(source, job_id)`. The `raw.job_posting_observations` table records daily role-level sightings based on `(source, job_id, search_country, search_role, extract_date)`.
 
 ## Project Structure
 
@@ -129,6 +133,12 @@ Check the raw table count:
 python -c "from src.load.postgres_loader import get_connection; conn = get_connection(); cur = conn.cursor(); cur.execute('SELECT COUNT(*) FROM raw.job_postings'); print(cur.fetchone()[0]); cur.close(); conn.close()"
 ```
 
+Check the raw observation table count:
+
+```powershell
+python -c "from src.load.postgres_loader import get_connection; conn = get_connection(); cur = conn.cursor(); cur.execute('SELECT COUNT(*) FROM raw.job_posting_observations'); print(cur.fetchone()[0]); cur.close(); conn.close()"
+```
+
 ## Planned Pipeline Flow
 
 ```text
@@ -145,7 +155,6 @@ Adzuna API
 
 ## Next Steps
 
-- add a raw job posting observations table for daily role-level sightings
 - parameterize country, role, date, page count, and results per page
 - add dbt staging models on top of `raw.job_postings`
 - add data quality and freshness checks
@@ -155,4 +164,4 @@ Adzuna API
 
 ## Project Status
 
-Current stage: working multi-role MVP raw ingestion and PostgreSQL load completed.
+Current stage: working multi-role MVP raw ingestion, PostgreSQL unique posting load, and observation load completed.
