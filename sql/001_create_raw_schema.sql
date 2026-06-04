@@ -42,3 +42,31 @@ ON raw.job_postings (created_at);
 
 CREATE INDEX IF NOT EXISTS idx_job_postings_loaded_at
 ON raw.job_postings (loaded_at);
+
+CREATE TABLE IF NOT EXISTS raw.job_posting_observations (
+    id BIGSERIAL PRIMARY KEY,
+    source TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    search_role TEXT NOT NULL,
+    search_country TEXT NOT NULL,
+    extract_date DATE NOT NULL,
+    observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_job_posting_observations_unique_sighting UNIQUE (
+        source,
+        job_id,
+        search_country,
+        search_role,
+        extract_date
+    ),
+    CONSTRAINT fk_job_posting_observations_job_postings FOREIGN KEY (source, job_id)
+        REFERENCES raw.job_postings (source, job_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_posting_observations_extract_date
+ON raw.job_posting_observations (extract_date);
+
+CREATE INDEX IF NOT EXISTS idx_job_posting_observations_search_country_role
+ON raw.job_posting_observations (search_country, search_role);
+
+CREATE INDEX IF NOT EXISTS idx_job_posting_observations_source_job_id
+ON raw.job_posting_observations (source, job_id);
