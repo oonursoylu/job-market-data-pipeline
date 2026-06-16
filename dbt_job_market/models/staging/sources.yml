@@ -1,0 +1,74 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Raw job market data loaded from the Adzuna API into PostgreSQL.
+    schema: raw
+    tables:
+      - name: job_postings
+        description: Unique job postings loaded from the Adzuna API.
+        loaded_at_field: loaded_at
+        freshness:
+          warn_after:
+            count: 24
+            period: hour
+          error_after:
+            count: 48
+            period: hour
+        columns:
+          - name: source
+            description: Source system for the job posting.
+            tests:
+              - not_null
+          - name: job_id
+            description: Job identifier from the source system.
+            tests:
+              - not_null
+          - name: raw_json
+            description: Full raw JSON payload from the source API.
+            tests:
+              - not_null
+          - name: loaded_at
+            description: Timestamp when the job posting was loaded into PostgreSQL.
+            tests:
+              - not_null
+          - name: extract_date
+            description: Date when the API extraction was executed.
+            tests:
+              - not_null
+
+      - name: job_posting_observations
+        description: Country, role, and date level sightings of job postings.
+        loaded_at_field: observed_at
+        freshness:
+          warn_after:
+            count: 24
+            period: hour
+          error_after:
+            count: 48
+            period: hour
+        columns:
+          - name: source
+            description: Source system for the job posting observation.
+            tests:
+              - not_null
+          - name: job_id
+            description: Job identifier from the source system.
+            tests:
+              - not_null
+          - name: search_country
+            description: Country code used in the search request.
+            tests:
+              - not_null
+          - name: search_role
+            description: Role keyword group used in the search request.
+            tests:
+              - not_null
+          - name: extract_date
+            description: Date when the API extraction was executed.
+            tests:
+              - not_null
+          - name: observed_at
+            description: Timestamp when the observation was loaded into PostgreSQL.
+            tests:
+              - not_null
