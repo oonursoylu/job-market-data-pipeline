@@ -1,4 +1,4 @@
-# Germany and UK Job Market Data Pipeline
+# Job Market Data Pipeline
 
 > Status: Active development. This is a portfolio data engineering project built step by step to practice API ingestion, raw data archiving, PostgreSQL loading, dbt modeling, data quality checks, and analytics reporting.
 
