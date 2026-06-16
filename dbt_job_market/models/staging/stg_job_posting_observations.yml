@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: stg_job_posting_observations
+    description: Staging model for country, role, and date level job posting observations.
+    columns:
+      - name: observation_id
+        description: Deterministic identifier generated from source, job_id, search_country, search_role, and extract_date.
+        tests:
+          - not_null
+          - unique
+
+      - name: source
+        description: Source system for the job posting observation.
+        tests:
+          - not_null
+
+      - name: job_id
+        description: Job identifier from the source system.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_job_postings')
+                field: job_id
+
+      - name: search_country
+        description: Country code used in the search request.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - de
+                  - gb
+
+      - name: search_role
+        description: Role keyword group used in the search request.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - data_engineer
+                  - analytics_engineer
+                  - ai_engineer
+
+      - name: extract_date
+        description: Date when the API extraction was executed.
+        tests:
+          - not_null
+
+      - name: observed_at
+        description: Timestamp when the observation was loaded into PostgreSQL.
+        tests:
+          - not_null

@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: stg_job_postings
+    description: Cleaned staging model for unique job postings from the raw Adzuna source.
+    columns:
+      - name: source
+        description: Source system for the job posting.
+        tests:
+          - not_null
+
+      - name: job_id
+        description: Job identifier from the source system.
+        tests:
+          - not_null
+          - unique
+
+      - name: job_title
+        description: Job title from the posting.
+
+      - name: company_name
+        description: Company name from the posting.
+
+      - name: location
+        description: Display location from the posting.
+
+      - name: search_country
+        description: Country code used in the search request.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - de
+                  - gb
+
+      - name: search_role
+        description: Role keyword group used in the search request.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - data_engineer
+                  - analytics_engineer
+                  - ai_engineer
+
+      - name: extract_date
+        description: Date when the API extraction was executed.
+        tests:
+          - not_null
+
+      - name: loaded_at
+        description: Timestamp when the job posting was loaded into PostgreSQL.
+        tests:
+          - not_null
