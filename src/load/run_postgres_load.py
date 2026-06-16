@@ -33,27 +33,36 @@ def run_load(file_path: str | Path, search_role: str, search_country: str, extra
 
 
 if __name__ == "__main__":
-    search_country = "de"
-    extract_date = date.today()
+    search_countries = [
+        "de",
+        "gb",
+    ]
+
     search_roles = [
         "data_engineer",
         "analytics_engineer",
         "ai_engineer",
     ]
 
-    for search_role in search_roles:
-        file_path = (
-            Path("data/raw/adzuna")
-            / f"country={search_country}"
-            / f"search_role={search_role}"
-            / f"date={extract_date.isoformat()}"
-            / "jobs.jsonl"
-        )
+    extract_date = date.today()
 
-        print(f"\nStarting load for role: {search_role}")
-        run_load(
-            file_path=file_path,
-            search_role=search_role,
-            search_country=search_country,
-            extract_date=extract_date,
-        )
+    for search_country in search_countries:
+        for search_role in search_roles:
+            file_path = (
+                Path("data/raw/adzuna")
+                / f"country={search_country}"
+                / f"search_role={search_role}"
+                / f"date={extract_date.isoformat()}"
+                / "jobs.jsonl"
+            )
+
+            print(f"\nStarting load for country: {search_country}, role: {search_role}")
+            run_load(
+                file_path=file_path,
+                search_role=search_role,
+                search_country=search_country,
+                extract_date=extract_date,
+            )
+
+
+
