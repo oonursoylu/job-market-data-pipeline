@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: int_job_posting_skills
+    description: "Intermediate model that maps job postings to skills found in job descriptions using a controlled dictionary."
+    columns:
+      - name: job_skill_id
+        description: "Deterministic identifier for a job posting and matched skill."
+        tests:
+          - not_null
+          - unique
+
+      - name: job_id
+        description: "Job identifier from the source system."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_job_postings')
+                field: job_id
+
+      - name: skill
+        description: "Matched normalized skill name."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('skill_dictionary')
+                field: skill
+
+      - name: category
+        description: "Skill category from the controlled dictionary."
+        tests:
+          - not_null

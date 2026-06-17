@@ -1,0 +1,30 @@
+skill,category,pattern
+python,programming,python
+sql,programming,sql
+java,programming,java
+scala,programming,scala
+airflow,orchestration,airflow
+dagster,orchestration,dagster
+prefect,orchestration,prefect
+dbt,transformation,dbt
+spark,big_data,spark
+kafka,big_data,kafka
+snowflake,warehouse,snowflake
+bigquery,warehouse,bigquery
+redshift,warehouse,redshift
+postgresql,database,postgresql
+mysql,database,mysql
+mongodb,database,mongodb
+aws,cloud,aws
+azure,cloud,azure
+gcp,cloud,gcp
+docker,devops,docker
+kubernetes,devops,kubernetes
+terraform,devops,terraform
+tableau,bi,tableau
+power bi,bi,power bi
+looker,bi,looker
+machine learning,ai,machine learning
+tensorflow,ai,tensorflow
+pytorch,ai,pytorch
+mlflow,mlops,mlflow

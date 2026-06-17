@@ -1,0 +1,35 @@
+version: 2
+
+seeds:
+  - name: skill_dictionary
+    description: "Controlled skill dictionary used for deterministic skill extraction from job descriptions."
+    columns:
+      - name: skill
+        description: "Normalized skill name."
+        data_tests:
+          - not_null
+          - unique
+
+      - name: category
+        description: "High-level skill category."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - programming
+                  - orchestration
+                  - transformation
+                  - warehouse
+                  - database
+                  - big_data
+                  - cloud
+                  - devops
+                  - bi
+                  - ai
+                  - mlops
+
+      - name: pattern
+        description: "Text pattern used to match the skill in job descriptions."
+        data_tests:
+          - not_null
