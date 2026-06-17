@@ -74,14 +74,14 @@ The current working pipeline supports:
 
 ## Latest Verified Local Snapshot
 
-As of 2026-06-16, the latest verified local snapshot contains:
+As of 2026-06-17, the latest verified local snapshot contains:
 
 ```text
-raw.job_postings: 987 unique job postings
-raw.job_posting_observations: 1,200 observations
+raw.job_postings: 1,032 unique job postings
+raw.job_posting_observations: 2,100 observations
 ```
 
-Observation coverage for 2026-06-16:
+Observation coverage for 2026-06-17:
 
 ```text
 de / data_engineer: 150
