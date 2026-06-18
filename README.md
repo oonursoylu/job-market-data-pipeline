@@ -53,6 +53,7 @@ Adzuna API
 -> PostgreSQL raw schema
 -> dbt sources and staging models
 -> dbt tests and freshness checks
+-> dbt intermediate skill extraction
 -> dbt marts, dashboard, and reports (planned)
 ```
 
@@ -70,18 +71,19 @@ The current working pipeline supports:
 - defining raw PostgreSQL tables as dbt sources
 - running dbt source freshness checks
 - building dbt staging views
-- testing staging models with dbt generic tests
+- extracting job-skill pairs with a controlled dbt seed dictionary
+- testing dbt models with generic tests
 
 ## Latest Verified Local Snapshot
 
-As of 2026-06-17, the latest verified local snapshot contains:
+As of 2026-06-18, the latest verified local snapshot contains:
 
 ```text
-raw.job_postings: 1,032 unique job postings
-raw.job_posting_observations: 2,100 observations
+raw.job_postings: 1,085 unique job postings
+raw.job_posting_observations: 3,000 observations
 ```
 
-Observation coverage for 2026-06-17:
+Observation coverage for 2026-06-18:
 
 ```text
 de / data_engineer: 150
@@ -95,7 +97,16 @@ gb / ai_engineer: 150
 Latest dbt validation:
 
 ```text
-dbt build: 33 checks passed, 0 warnings, 0 errors
+dbt source freshness: passed
+dbt build: 47 checks passed, 0 warnings, 0 errors
+```
+
+Current skill extraction snapshot:
+
+```text
+analytics.int_job_posting_skills: 247 job-skill matches
+matched job postings: 182
+matched skills: 18
 ```
 
 These numbers are a local development snapshot and will change as the pipeline is run on later dates.
@@ -134,6 +145,10 @@ Implemented so far:
 - staging models:
   - `stg_job_postings`
   - `stg_job_posting_observations`
+- seed data:
+  - `skill_dictionary`
+- intermediate models:
+  - `int_job_posting_skills`
 - generic dbt tests:
   - `not_null`
   - `unique`
@@ -141,6 +156,8 @@ Implemented so far:
   - `relationships`
 
 The staging layer currently preserves the raw grain while cleaning text fields, deriving a posting date, and making the observation grain explicit with a deterministic `observation_id`.
+
+The first intermediate model maps job descriptions to normalized skills using a small dictionary-based approach. This keeps the skill extraction logic easy to inspect and leaves more advanced NLP or LLM-based extraction as a later improvement.
 
 ## Project Structure
 
@@ -164,7 +181,9 @@ sql/
 dbt_job_market/
   models/
     staging/
+    intermediate/
   seeds/
+    skill_dictionary.csv
   tests/
   macros/
 data/
@@ -294,9 +313,7 @@ conn.close()
 ## Next Steps
 
 - continue daily manual ingestion before Airflow
-- add a skill dictionary seed for lightweight skill extraction
-- build intermediate dbt models for job-skill mapping
-- build mart tables for country, role, skill, location, and company analysis
+- build mart tables for skill, role, country, location, and company analysis
 - create a Streamlit dashboard
 - generate a weekly Markdown market report
 - add Airflow orchestration
