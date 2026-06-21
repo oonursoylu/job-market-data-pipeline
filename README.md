@@ -170,7 +170,7 @@ The first intermediate model maps job descriptions to normalized skills using a 
 The current mart layer includes daily role demand, daily skill demand, a country-role-skill summary, and a latest postings table for dashboard use.
 
 <details>
-<summary><strong>View dbt docs and lineage locally</strong></summary>
+<summary><strong>Generate dbt docs and lineage locally</strong></summary>
 
 Run the docs server from the dbt project directory:
 
@@ -180,12 +180,13 @@ dbt docs generate
 dbt docs serve
 ```
 
-Then open the local docs site:
+When the server is running, open the local docs site in a browser:
 
-- [Open local dbt docs](http://localhost:8080)
-- [Open local lineage overview](http://localhost:8080/#!/overview)
+```text
+http://localhost:8080
+```
 
-These links are local-only and work only while `dbt docs serve` is running on the same machine.
+The lineage graph is available from the docs overview page. The local address only works while `dbt docs serve` is running on the same machine.
 
 </details>
 
