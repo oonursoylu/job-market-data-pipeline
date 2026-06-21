@@ -1,0 +1,71 @@
+version: 2
+
+models:
+  - name: mart_country_role_skill_demand
+    description: "Country and role level skill demand summary built from the daily skill demand fact table. Averages are calculated across run days where the skill was observed."
+    columns:
+      - name: country_role_skill_demand_id
+        description: "Deterministic identifier for the country, role, and skill grain."
+        tests:
+          - not_null
+          - unique
+
+      - name: source
+        description: "Source system for the job posting observations."
+        tests:
+          - not_null
+
+      - name: search_country
+        description: "Country code used in the search request."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - de
+                  - gb
+
+      - name: search_role
+        description: "Role keyword group used in the search request."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - data_engineer
+                  - analytics_engineer
+                  - ai_engineer
+
+      - name: skill
+        description: "Matched normalized skill name."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('skill_dictionary')
+                field: skill
+
+      - name: category
+        description: "Skill category from the controlled dictionary."
+        tests:
+          - not_null
+
+      - name: total_skill_mentions
+        description: "Total number of observed job-skill matches across run days for this country, role, and skill."
+        tests:
+          - not_null
+
+      - name: active_run_days
+        description: "Number of extraction dates where this country, role, and skill combination was observed."
+        tests:
+          - not_null
+
+      - name: avg_skill_mentions_per_run
+        description: "Average skill mentions across run days where this skill was observed for the country and role."
+        tests:
+          - not_null
+
+      - name: latest_extract_date
+        description: "Most recent extraction date where this country, role, and skill combination was observed."
+        tests:
+          - not_null
