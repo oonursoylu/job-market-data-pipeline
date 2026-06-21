@@ -169,7 +169,10 @@ The first intermediate model maps job descriptions to normalized skills using a 
 
 The current mart layer includes daily role demand, daily skill demand, a country-role-skill summary, and a latest postings table for dashboard use.
 
-dbt docs and lineage can be generated locally:
+<details>
+<summary><strong>View dbt docs and lineage locally</strong></summary>
+
+Run the docs server from the dbt project directory:
 
 ```powershell
 cd dbt_job_market
@@ -177,7 +180,14 @@ dbt docs generate
 dbt docs serve
 ```
 
-After the docs server starts, the local lineage graph is available at [http://localhost:8080/#!/overview?g_v=1](http://localhost:8080/#!/overview?g_v=1). This link works while `dbt docs serve` is running locally.
+Then open the local docs site:
+
+- [Open local dbt docs](http://localhost:8080)
+- [Open local lineage overview](http://localhost:8080/#!/overview)
+
+These links are local-only and work only while `dbt docs serve` is running on the same machine.
+
+</details>
 
 ## Project Structure
 
