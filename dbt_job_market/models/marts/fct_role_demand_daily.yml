@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: fct_role_demand_daily
+    description: "Daily observed role demand by extraction date, country, and role. Missing dates mean the batch pipeline was not run, not zero demand."
+    columns:
+      - name: role_demand_daily_id
+        description: "Deterministic identifier for the daily role demand grain."
+        tests:
+          - not_null
+          - unique
+
+      - name: source
+        description: "Source system for the job posting observations."
+        tests:
+          - not_null
+
+      - name: extract_date
+        description: "Date when the batch pipeline observed the postings."
+        tests:
+          - not_null
+
+      - name: search_country
+        description: "Country code used in the search request."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - de
+                  - gb
+
+      - name: search_role
+        description: "Role keyword group used in the search request."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - data_engineer
+                  - analytics_engineer
+                  - ai_engineer
+
+      - name: observed_posting_count
+        description: "Number of distinct job postings observed for this date, country, and role."
+        tests:
+          - not_null
