@@ -1,0 +1,82 @@
+version: 2
+
+models:
+  - name: mart_latest_postings
+    description: "Latest observed job postings for dashboard display. This mart contains one row per source job id with the latest observed search context."
+    columns:
+      - name: latest_posting_id
+        description: "Deterministic identifier for the latest posting mart grain."
+        tests:
+          - not_null
+          - unique
+
+      - name: source
+        description: "Source system for the job posting."
+        tests:
+          - not_null
+
+      - name: job_id
+        description: "Job identifier from the source system."
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_job_postings')
+                field: job_id
+
+      - name: job_title
+        description: "Job title from the posting."
+        tests:
+          - not_null
+
+      - name: company_name
+        description: "Company name from the posting."
+
+      - name: location
+        description: "Display location from the posting."
+
+      - name: country
+        description: "Country field from the source posting."
+
+      - name: search_country
+        description: "Country code from the latest observed search context."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - de
+                  - gb
+
+      - name: search_role
+        description: "Role keyword group from the latest observed search context."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - data_engineer
+                  - analytics_engineer
+                  - ai_engineer
+
+      - name: posted_date
+        description: "Date when the job posting was created at the source, when available."
+
+      - name: first_observed_date
+        description: "First extraction date when this job posting was observed."
+        tests:
+          - not_null
+
+      - name: latest_extract_date
+        description: "Most recent extraction date when this job posting was observed."
+        tests:
+          - not_null
+
+      - name: times_observed
+        description: "Number of extraction dates where this job posting was observed."
+        tests:
+          - not_null
+
+      - name: redirect_url
+        description: "Source redirect URL for the job posting."
