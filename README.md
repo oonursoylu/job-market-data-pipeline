@@ -54,7 +54,8 @@ Adzuna API
 -> dbt sources and staging models
 -> dbt tests and freshness checks
 -> dbt intermediate skill extraction
--> dbt marts, dashboard, and reports (planned)
+-> dbt fact and mart models
+-> dashboard and reports (planned)
 ```
 
 The current working pipeline supports:
@@ -72,18 +73,19 @@ The current working pipeline supports:
 - running dbt source freshness checks
 - building dbt staging views
 - extracting job-skill pairs with a controlled dbt seed dictionary
+- building daily fact tables and reporting marts for role, skill, and latest posting analysis
 - testing dbt models with generic tests
 
 ## Latest Verified Local Snapshot
 
-As of 2026-06-18, the latest verified local snapshot contains:
+As of 2026-06-19, the latest verified local snapshot contains:
 
 ```text
-raw.job_postings: 1,085 unique job postings
-raw.job_posting_observations: 3,000 observations
+raw.job_postings: 1,139 unique job postings
+raw.job_posting_observations: 3,900 observations
 ```
 
-Observation coverage for 2026-06-18:
+Observation coverage for 2026-06-19:
 
 ```text
 de / data_engineer: 150
@@ -98,15 +100,15 @@ Latest dbt validation:
 
 ```text
 dbt source freshness: passed
-dbt build: 47 checks passed, 0 warnings, 0 errors
+dbt build: 100 checks passed, 0 warnings, 0 errors
 ```
 
 Current skill extraction snapshot:
 
 ```text
-analytics.int_job_posting_skills: 247 job-skill matches
-matched job postings: 182
-matched skills: 18
+analytics.int_job_posting_skills: 263 job-skill matches
+matched job postings: 192
+matched skills: 20
 ```
 
 These numbers are a local development snapshot and will change as the pipeline is run on later dates.
@@ -149,6 +151,12 @@ Implemented so far:
   - `skill_dictionary`
 - intermediate models:
   - `int_job_posting_skills`
+- fact models:
+  - `fct_role_demand_daily`
+  - `fct_skill_demand_daily`
+- mart models:
+  - `mart_country_role_skill_demand`
+  - `mart_latest_postings`
 - generic dbt tests:
   - `not_null`
   - `unique`
@@ -158,6 +166,18 @@ Implemented so far:
 The staging layer currently preserves the raw grain while cleaning text fields, deriving a posting date, and making the observation grain explicit with a deterministic `observation_id`.
 
 The first intermediate model maps job descriptions to normalized skills using a small dictionary-based approach. This keeps the skill extraction logic easy to inspect and leaves more advanced NLP or LLM-based extraction as a later improvement.
+
+The current mart layer includes daily role demand, daily skill demand, a country-role-skill summary, and a latest postings table for dashboard use.
+
+dbt docs and lineage can be generated locally:
+
+```powershell
+cd dbt_job_market
+dbt docs generate
+dbt docs serve
+```
+
+After the docs server starts, the local lineage graph is available at [http://localhost:8080/#!/overview?g_v=1](http://localhost:8080/#!/overview?g_v=1). This link works while `dbt docs serve` is running locally.
 
 ## Project Structure
 
@@ -182,6 +202,7 @@ dbt_job_market/
   models/
     staging/
     intermediate/
+    marts/
   seeds/
     skill_dictionary.csv
   tests/
@@ -240,9 +261,9 @@ dbt source freshness
 dbt build
 ```
 
-## Daily Manual Run Before Airflow
+## Recurring Manual Run Before Airflow
 
-Airflow has not been added yet. Until orchestration is implemented, the pipeline can be run manually once per day:
+Airflow has not been added yet. Until orchestration is implemented, the pipeline is run as a recurring manual batch a few times per week:
 
 ```powershell
 python src\extract\run_adzuna_extract.py
@@ -254,6 +275,8 @@ cd ..
 ```
 
 The load step is designed to be safe to rerun. Existing job postings and duplicate same-day observations are skipped by database constraints.
+
+The dbt marts are keyed by extraction dates. Missing dates mean the batch was not run, not that market demand was zero.
 
 ## Useful Validation Queries
 
@@ -312,9 +335,9 @@ conn.close()
 
 ## Next Steps
 
-- continue daily manual ingestion before Airflow
-- build mart tables for skill, role, country, location, and company analysis
+- continue recurring manual ingestion before Airflow
 - create a Streamlit dashboard
+- review location values before adding a location demand mart
 - generate a weekly Markdown market report
 - add Airflow orchestration
 - add Docker Compose later for reproducibility
@@ -324,6 +347,8 @@ conn.close()
 - The Adzuna API may not represent the full job market.
 - Salary information is often missing or incomplete in job postings.
 - The first skill extraction layer will be dictionary-based and may miss some skills or create false positives.
+- Latest-postings marts are based on observed jobs. A small number of early job records may exist in the unique job catalog without matching observation records.
+- Similar company and title combinations can appear more than once when the source publishes separate postings with different source job IDs.
 - The project is an active portfolio project, not a production deployment.
 - Missed ingestion days are not backfilled with synthetic observations.
 
