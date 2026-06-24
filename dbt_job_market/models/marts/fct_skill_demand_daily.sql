@@ -25,6 +25,17 @@ job_skills as (
 
 ),
 
+posting_groups as (
+
+    select
+        source,
+        job_id,
+        posting_group_id
+
+    from {{ ref('int_job_posting_groups') }}
+
+),
+
 skill_demand_daily as (
 
     select
@@ -41,12 +52,17 @@ skill_demand_daily as (
         observations.search_role,
         job_skills.skill,
         job_skills.category,
-        count(distinct observations.job_id) as posting_count
+        count(distinct observations.job_id) as posting_count,
+        count(distinct posting_groups.posting_group_id) as deduped_posting_group_count
 
     from observations
     inner join job_skills
         on observations.source = job_skills.source
         and observations.job_id = job_skills.job_id
+
+    left join posting_groups
+        on observations.source = posting_groups.source
+        and observations.job_id = posting_groups.job_id
 
     group by
         observations.source,

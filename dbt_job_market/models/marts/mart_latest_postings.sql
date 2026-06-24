@@ -16,6 +16,19 @@ with job_postings as (
 
 ),
 
+posting_groups as (
+
+    select
+        source,
+        job_id,
+        posting_group_id,
+        normalized_company_name,
+        normalized_job_title
+
+    from {{ ref('int_job_posting_groups') }}
+
+),
+
 observations as (
 
     select
@@ -81,12 +94,15 @@ latest_postings as (
         md5(job_postings.source || '|' || job_postings.job_id) as latest_posting_id,
         job_postings.source,
         job_postings.job_id,
+        posting_groups.posting_group_id,
         job_postings.job_title,
         job_postings.company_name,
         job_postings.location,
         job_postings.country,
         latest_observation.search_country,
         latest_observation.search_role,
+        posting_groups.normalized_company_name,
+        posting_groups.normalized_job_title,
         job_postings.posted_date,
         observation_summary.first_observed_date,
         observation_summary.latest_extract_date,
@@ -101,6 +117,10 @@ latest_postings as (
     inner join latest_observation
         on job_postings.source = latest_observation.source
         and job_postings.job_id = latest_observation.job_id
+
+    left join posting_groups
+        on job_postings.source = posting_groups.source
+        and job_postings.job_id = posting_groups.job_id
 
 )
 

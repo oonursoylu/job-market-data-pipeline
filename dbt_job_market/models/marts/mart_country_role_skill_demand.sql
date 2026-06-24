@@ -9,7 +9,8 @@ with skill_demand_daily as (
         search_role,
         skill,
         category,
-        posting_count
+        posting_count,
+        deduped_posting_group_count
 
     from {{ ref('fct_skill_demand_daily') }}
 
@@ -30,8 +31,10 @@ country_role_skill_demand as (
         skill,
         category,
         sum(posting_count) as total_skill_mentions,
+        sum(deduped_posting_group_count) as deduped_total_skill_mentions,
         count(distinct extract_date) as active_run_days,
         round(avg(posting_count)::numeric, 2) as avg_skill_mentions_per_run,
+        round(avg(deduped_posting_group_count)::numeric, 2) as deduped_avg_skill_mentions_per_run,
         max(extract_date) as latest_extract_date
 
     from skill_demand_daily

@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: mart_latest_postings
-    description: "Latest observed job postings for dashboard display. This mart contains one row per source job id with the latest observed search context."
+    description: "Latest observed job postings for dashboard display. This mart contains one row per source job id with the latest observed search context and analytical posting group fields for deduplication-aware reporting."
     columns:
       - name: latest_posting_id
         description: "Deterministic identifier for the latest posting mart grain."
@@ -16,7 +16,7 @@ models:
           - not_null
 
       - name: job_id
-        description: "Job identifier from the source system."
+        description: "Job identifier from the source system. This remains the raw source grain."
         tests:
           - not_null
           - unique
@@ -24,6 +24,11 @@ models:
               arguments:
                 to: ref('stg_job_postings')
                 field: job_id
+
+      - name: posting_group_id
+        description: "Analytical group identifier for postings that likely represent the same real-world job opportunity across multiple source job IDs or locations."
+        tests:
+          - not_null
 
       - name: job_title
         description: "Job title from the posting."
@@ -59,6 +64,12 @@ models:
                   - data_engineer
                   - analytics_engineer
                   - ai_engineer
+
+      - name: normalized_company_name
+        description: "Lowercased and cleaned company name used for analytical grouping."
+
+      - name: normalized_job_title
+        description: "Lowercased and cleaned job title used for analytical grouping."
 
       - name: posted_date
         description: "Date when the job posting was created at the source, when available."

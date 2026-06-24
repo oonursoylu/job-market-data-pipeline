@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: int_job_posting_groups
+    description: "Intermediate model that assigns an analytical posting group ID to source job postings to reduce multi-location inflation in reporting."
+    columns:
+      - name: posting_group_id
+        description: "Analytical group identifier for postings that likely represent the same real-world job opportunity."
+        tests:
+          - not_null
+
+      - name: source
+        description: "Source system for the job posting."
+        tests:
+          - not_null
+
+      - name: job_id
+        description: "Job identifier from the source system. This remains the raw source grain."
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_job_postings')
+                field: job_id
+
+      - name: search_country
+        description: "Country code used in the search request."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - de
+                  - gb
+
+      - name: search_role
+        description: "Role keyword group used in the search request."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - data_engineer
+                  - analytics_engineer
+                  - ai_engineer
+
+      - name: normalized_company_name
+        description: "Lowercased and cleaned company name used for analytical grouping."
+
+      - name: normalized_job_title
+        description: "Lowercased and cleaned job title used for analytical grouping."
+
+      - name: description_hash
+        description: "Hash of the normalized description used to avoid grouping unrelated postings too aggressively."
+
+      - name: extract_date
+        description: "Date when the posting first entered the raw job catalog."
+        tests:
+          - not_null

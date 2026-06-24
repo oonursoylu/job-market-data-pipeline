@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: mart_country_role_skill_demand
-    description: "Country and role level skill demand summary built from the daily skill demand fact table. Averages are calculated across run days where the skill was observed."
+    description: "Country and role level skill demand summary built from the daily skill demand fact table. Both source job posting counts and deduplicated analytical posting group counts are included."
     columns:
       - name: country_role_skill_demand_id
         description: "Deterministic identifier for the country, role, and skill grain."
@@ -51,7 +51,12 @@ models:
           - not_null
 
       - name: total_skill_mentions
-        description: "Total number of observed job-skill matches across run days for this country, role, and skill."
+        description: "Total number of source job postings with this skill across run days for this country and role."
+        tests:
+          - not_null
+
+      - name: deduped_total_skill_mentions
+        description: "Total number of analytical posting groups with this skill across run days for this country and role. This reduces inflation from multi-location source postings."
         tests:
           - not_null
 
@@ -61,7 +66,12 @@ models:
           - not_null
 
       - name: avg_skill_mentions_per_run
-        description: "Average skill mentions across run days where this skill was observed for the country and role."
+        description: "Average source job posting skill mentions across run days where this skill was observed for the country and role."
+        tests:
+          - not_null
+
+      - name: deduped_avg_skill_mentions_per_run
+        description: "Average deduplicated analytical posting group skill mentions across run days where this skill was observed for the country and role."
         tests:
           - not_null
 

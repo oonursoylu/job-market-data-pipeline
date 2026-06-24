@@ -13,28 +13,43 @@ with observations as (
 
 ),
 
+posting_groups as (
+
+    select
+        source,
+        job_id,
+        posting_group_id
+
+    from {{ ref('int_job_posting_groups') }}
+
+),
+
 role_demand_daily as (
 
     select
         md5(
-            source || '|' ||
-            extract_date::text || '|' ||
-            search_country || '|' ||
-            search_role
+            observations.source || '|' ||
+            observations.extract_date::text || '|' ||
+            observations.search_country || '|' ||
+            observations.search_role
         ) as role_demand_daily_id,
-        source,
-        extract_date,
-        search_country,
-        search_role,
-        count(distinct job_id) as observed_posting_count
+        observations.source,
+        observations.extract_date,
+        observations.search_country,
+        observations.search_role,
+        count(distinct observations.job_id) as observed_posting_count,
+        count(distinct posting_groups.posting_group_id) as deduped_posting_group_count
 
     from observations
+    left join posting_groups
+        on observations.source = posting_groups.source
+        and observations.job_id = posting_groups.job_id
 
     group by
-        source,
-        extract_date,
-        search_country,
-        search_role
+        observations.source,
+        observations.extract_date,
+        observations.search_country,
+        observations.search_role
 
 )
 

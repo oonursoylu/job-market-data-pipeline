@@ -42,6 +42,11 @@ models:
                   - ai_engineer
 
       - name: observed_posting_count
-        description: "Number of distinct job postings observed for this date, country, and role."
+        description: "Number of distinct source job postings observed for this date, country, and role. This keeps the raw source job_id grain."
+        tests:
+          - not_null
+
+      - name: deduped_posting_group_count
+        description: "Number of distinct analytical posting groups observed for this date, country, and role. This reduces inflation from multi-location source postings."
         tests:
           - not_null
