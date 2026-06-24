@@ -73,19 +73,20 @@ The current working pipeline supports:
 - running dbt source freshness checks
 - building dbt staging views
 - extracting job-skill pairs with a controlled dbt seed dictionary
+- creating an analytical posting group grain to reduce multi-location overcounting
 - building daily fact tables and reporting marts for role, skill, and latest posting analysis
 - testing dbt models with generic tests
 
 ## Latest Verified Local Snapshot
 
-As of 2026-06-19, the latest verified local snapshot contains:
+As of 2026-06-23, the latest verified local snapshot contains:
 
 ```text
-raw.job_postings: 1,139 unique job postings
-raw.job_posting_observations: 3,900 observations
+raw.job_postings: 1,388 unique source job postings
+raw.job_posting_observations: 4,800 observations
 ```
 
-Observation coverage for 2026-06-19:
+Observation coverage for 2026-06-23:
 
 ```text
 de / data_engineer: 150
@@ -99,16 +100,15 @@ gb / ai_engineer: 150
 Latest dbt validation:
 
 ```text
-dbt source freshness: passed
-dbt build: 100 checks passed, 0 warnings, 0 errors
+targeted dbt build for deduplication-aware models: 69 checks passed, 0 warnings, 0 errors
 ```
 
 Current skill extraction snapshot:
 
 ```text
-analytics.int_job_posting_skills: 263 job-skill matches
-matched job postings: 192
-matched skills: 20
+analytics.int_job_posting_skills: 298 job-skill matches
+matched job postings: 210
+matched skills: 21
 ```
 
 These numbers are a local development snapshot and will change as the pipeline is run on later dates.
@@ -131,6 +131,51 @@ This design supports two important use cases:
 - keeping a unique job posting catalog
 - building time-series demand signals from repeated observations
 
+## Handling Multi-Location Posting Inflation
+
+While validating the job posting data, I noticed that source-level job counts can be inflated by multi-location postings. The same company or recruiter can publish the same role across many cities, and each location may appear with a different source `job_id`.
+
+I kept the raw source grain unchanged:
+
+```text
+source + job_id
+```
+
+This keeps the original Adzuna records traceable and avoids changing the meaning of the raw layer.
+
+For analytics, I added a separate dbt model called `int_job_posting_groups`. This model creates an analytical `posting_group_id` using:
+
+```text
+source + search_country + normalized_company_name + normalized_job_title + description_hash
+```
+
+Location is intentionally not part of this grouping key, because location is often what creates the repeated postings in the first place.
+
+This is not perfect deduplication. It is a practical analytical heuristic for reducing overcounting in dashboards and reporting while still keeping the original source job IDs available.
+
+As of the latest verified local snapshot on 2026-06-23, this check found:
+
+```text
+source job IDs: 1,388
+analytical posting groups: 910
+estimated duplicate-like inflation: 478
+location-driven inflation rows: 430
+same-location duplicate-like rows: 48
+```
+
+Most of the detected inflation in that snapshot was location-driven, which matched the issue found during validation.
+
+The downstream dbt models now keep both metrics side by side:
+
+```text
+source-level counts
+deduplicated posting group counts
+```
+
+This makes it possible to compare the raw source signal with a cleaner analytical estimate of job opportunities.
+
+I also changed `int_job_posting_groups` from a view to a table. The model performs text normalization and hashing, and it is reused by several downstream marts. In local validation, this reduced the `mart_latest_postings` build time from around 220 seconds to about 6-10 seconds.
+
 ## dbt Layer
 
 The first dbt layer has been added on top of the PostgreSQL raw schema.
@@ -151,6 +196,7 @@ Implemented so far:
   - `skill_dictionary`
 - intermediate models:
   - `int_job_posting_skills`
+  - `int_job_posting_groups`
 - fact models:
   - `fct_role_demand_daily`
   - `fct_skill_demand_daily`
@@ -166,6 +212,8 @@ Implemented so far:
 The staging layer currently preserves the raw grain while cleaning text fields, deriving a posting date, and making the observation grain explicit with a deterministic `observation_id`.
 
 The first intermediate model maps job descriptions to normalized skills using a small dictionary-based approach. This keeps the skill extraction logic easy to inspect and leaves more advanced NLP or LLM-based extraction as a later improvement.
+
+The posting group intermediate model assigns an analytical group ID to source job postings so downstream marts can reduce multi-location overcounting while still preserving source `job_id` traceability.
 
 The current mart layer includes daily role demand, daily skill demand, a country-role-skill summary, and a latest postings table for dashboard use.
 
