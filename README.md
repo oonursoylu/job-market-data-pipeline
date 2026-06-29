@@ -212,6 +212,20 @@ For skill insights, the main dashboard ranking uses deduplicated posting group c
 
 Skill trend charts use complete extraction dates only, where all country and role segments were collected. This avoids showing early partial runs as false demand growth.
 
+## Dashboard Preview
+
+### Overview and Role Demand
+
+![Dashboard overview and role demand](docs/screenshots/dashboard_overview_role_demand.png)
+
+### Skill Demand
+
+![Dashboard skill demand](docs/screenshots/dashboard_skill_demand.png)
+
+### Multi-Location Posting Groups
+
+![Dashboard multi-location posting groups](docs/screenshots/dashboard_multilocation_groups.png)
+
 ## dbt Layer
 
 The first dbt layer has been added on top of the PostgreSQL raw schema.
