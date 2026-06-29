@@ -210,6 +210,8 @@ estimated opportunities = deduplicated analytical posting groups
 
 For skill insights, the main dashboard ranking uses deduplicated posting group counts. This prevents a repeated multi-location job posting from inflating the apparent demand for skills such as Python, SQL, Azure, or AWS.
 
+Skill trend charts use complete extraction dates only, where all country and role segments were collected. This avoids showing early partial runs as false demand growth.
+
 ## dbt Layer
 
 The first dbt layer has been added on top of the PostgreSQL raw schema.
