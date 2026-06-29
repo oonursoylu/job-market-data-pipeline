@@ -148,6 +148,45 @@ def load_skill_demand_daily():
 
 
 @st.cache_data(ttl=300)
+def load_complete_extract_dates():
+    query = """
+        with daily_coverage as (
+
+            select
+                extract_date,
+                count(distinct search_country || '/' || search_role) as country_role_segments
+
+            from analytics.stg_job_posting_observations
+
+            group by extract_date
+
+        ),
+
+        expected_coverage as (
+
+            select
+                max(country_role_segments) as expected_country_role_segments
+
+            from daily_coverage
+
+        )
+
+        select
+            daily_coverage.extract_date
+
+        from daily_coverage
+        cross join expected_coverage
+
+        where daily_coverage.country_role_segments = expected_coverage.expected_country_role_segments
+
+        order by daily_coverage.extract_date
+    """
+
+    with get_connection() as conn:
+        return pd.read_sql(query, conn)
+
+
+@st.cache_data(ttl=300)
 def load_latest_postings():
     query = """
         select
@@ -359,11 +398,24 @@ st.caption(
 )
 
 skill_demand_daily = load_skill_demand_daily()
+complete_extract_dates = load_complete_extract_dates()
+
 skill_demand_daily["extract_date"] = pd.to_datetime(skill_demand_daily["extract_date"])
+complete_extract_dates["extract_date"] = pd.to_datetime(complete_extract_dates["extract_date"])
+skill_demand_daily = skill_demand_daily[
+    skill_demand_daily["extract_date"].isin(complete_extract_dates["extract_date"])
+]
 skill_demand_daily["Country"] = skill_demand_daily["search_country"].map(COUNTRY_LABELS)
 skill_demand_daily["Role"] = skill_demand_daily["search_role"].map(ROLE_LABELS)
 skill_demand_daily["Skill"] = skill_demand_daily["skill"].map(format_skill_label)
 skill_demand_daily["Category"] = skill_demand_daily["category"].map(CATEGORY_LABELS)
+
+if not complete_extract_dates.empty:
+    first_complete_extract_date = complete_extract_dates["extract_date"].min().date()
+    st.caption(
+        "Skill demand uses complete extraction dates only, where all country and role segments were collected. "
+        f"The comparable trend window starts on {first_complete_extract_date}."
+    )
 
 filter_col1, filter_col2, filter_col3 = st.columns(3)
 
