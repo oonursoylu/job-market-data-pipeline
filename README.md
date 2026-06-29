@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-This project collects Data and AI job postings from the Adzuna API, archives the raw JSON responses locally, loads the data into PostgreSQL, and models it with dbt for later analysis and dashboarding.
+This project collects Data and AI job postings from the Adzuna API, archives the raw JSON responses locally, loads the data into PostgreSQL, models it with dbt, and serves the results through a Streamlit dashboard.
 
 The project started with Germany to keep the first version focused. After validating the raw ingestion and load design, the pipeline was expanded to include the United Kingdom for country-level comparison.
 
@@ -55,7 +55,7 @@ Adzuna API
 -> dbt tests and freshness checks
 -> dbt intermediate skill extraction
 -> dbt fact and mart models
--> dashboard and reports (planned)
+-> Streamlit dashboard
 ```
 
 The current working pipeline supports:
@@ -75,18 +75,19 @@ The current working pipeline supports:
 - extracting job-skill pairs with a controlled dbt seed dictionary
 - creating an analytical posting group grain to reduce multi-location overcounting
 - building daily fact tables and reporting marts for role, skill, and latest posting analysis
+- visualizing role demand, skill demand, multi-location inflation, and latest postings in Streamlit
 - testing dbt models with generic tests
 
 ## Latest Verified Local Snapshot
 
-As of 2026-06-23, the latest verified local snapshot contains:
+As of 2026-06-28, the latest verified local snapshot contains:
 
 ```text
-raw.job_postings: 1,388 unique source job postings
-raw.job_posting_observations: 4,800 observations
+raw.job_postings: 1,559 unique source job postings
+raw.job_posting_observations: 5,700 observations
 ```
 
-Observation coverage for 2026-06-23:
+Observation coverage for 2026-06-28:
 
 ```text
 de / data_engineer: 150
@@ -100,15 +101,25 @@ gb / ai_engineer: 150
 Latest dbt validation:
 
 ```text
-targeted dbt build for deduplication-aware models: 69 checks passed, 0 warnings, 0 errors
+dbt build completed successfully
+PASS=116 WARN=0 ERROR=0 SKIP=0 TOTAL=116
 ```
 
 Current skill extraction snapshot:
 
 ```text
-analytics.int_job_posting_skills: 298 job-skill matches
-matched job postings: 210
+analytics.int_job_posting_skills: 368 job-skill matches
+matched job postings: 249
 matched skills: 21
+analytics.mart_skill_demand_dashboard: 62 dashboard-ready skill rows
+```
+
+Latest observed posting catalog as of 2026-06-28:
+
+```text
+source postings: 1,555
+deduplicated analytical posting groups: 1,009
+potential multi-location inflation: 546
 ```
 
 These numbers are a local development snapshot and will change as the pipeline is run on later dates.
@@ -153,14 +164,14 @@ Location is intentionally not part of this grouping key, because location is oft
 
 This is not perfect deduplication. It is a practical analytical heuristic for reducing overcounting in dashboards and reporting while still keeping the original source job IDs available.
 
-As of the latest verified local snapshot on 2026-06-23, this check found:
+As of the latest verified local snapshot on 2026-06-28, the latest postings mart shows:
 
 ```text
-source job IDs: 1,388
-analytical posting groups: 910
-estimated duplicate-like inflation: 478
-location-driven inflation rows: 430
-same-location duplicate-like rows: 48
+source job IDs: 1,555
+analytical posting groups: 1,009
+estimated duplicate-like inflation: 546
+location-driven inflation rows: 468
+same-location duplicate-like rows: 78
 ```
 
 Most of the detected inflation in that snapshot was location-driven, which matched the issue found during validation.
@@ -174,7 +185,30 @@ deduplicated posting group counts
 
 This makes it possible to compare the raw source signal with a cleaner analytical estimate of job opportunities.
 
-I also changed `int_job_posting_groups` from a view to a table. The model performs text normalization and hashing, and it is reused by several downstream marts. In local validation, this reduced the `mart_latest_postings` build time from around 220 seconds to about 6-10 seconds.
+During validation, one downstream mart became much slower after the posting group logic was added. The reason was that `int_job_posting_groups` was initially materialized as a view, so downstream models had to repeatedly recompute the normalization and hashing logic.
+
+I changed `int_job_posting_groups` to a table because it is a reusable intermediate model, not just a one-off query. In local validation, this reduced the `mart_latest_postings` build time from around 220 seconds to about 6-10 seconds.
+
+## Streamlit Dashboard
+
+The project includes a local Streamlit dashboard that makes the dbt marts easier to inspect.
+
+The dashboard currently shows:
+
+- headline metrics for source postings, deduplicated opportunities, and potential multi-location inflation
+- role demand by country and role, comparing source-level postings with deduplicated analytical groups
+- top multi-location posting groups, useful for auditing why source counts can be inflated
+- deduplicated skill demand rankings and skill trends across extraction dates
+- latest observed postings with filters for country, role, and text search
+
+The dashboard intentionally keeps both perspectives visible:
+
+```text
+source postings = original source-level job records
+estimated opportunities = deduplicated analytical posting groups
+```
+
+For skill insights, the main dashboard ranking uses deduplicated posting group counts. This prevents a repeated multi-location job posting from inflating the apparent demand for skills such as Python, SQL, Azure, or AWS.
 
 ## dbt Layer
 
@@ -266,6 +300,8 @@ dbt_job_market/
     skill_dictionary.csv
   tests/
   macros/
+dashboard/
+  app.py
 data/
   raw/
 reports/
@@ -319,6 +355,15 @@ cd dbt_job_market
 dbt source freshness
 dbt build
 ```
+
+Run the Streamlit dashboard from the project root:
+
+```powershell
+cd ..
+streamlit run dashboard\app.py
+```
+
+The dashboard expects the PostgreSQL database and dbt marts to exist locally. Run the extract, load, and dbt steps first if the tables are missing or stale.
 
 ## Recurring Manual Run Before Airflow
 
@@ -395,7 +440,7 @@ conn.close()
 ## Next Steps
 
 - continue recurring manual ingestion before Airflow
-- create a Streamlit dashboard
+- add dashboard screenshots to the README
 - review location values before adding a location demand mart
 - generate a weekly Markdown market report
 - add Airflow orchestration
@@ -404,8 +449,10 @@ conn.close()
 ## Limitations
 
 - The Adzuna API may not represent the full job market.
+- Each run currently fetches a capped sample of 150 postings per country and role.
 - Salary information is often missing or incomplete in job postings.
 - The first skill extraction layer will be dictionary-based and may miss some skills or create false positives.
+- The posting group logic is a practical analytical heuristic, not a perfect real-world job identity resolver.
 - Latest-postings marts are based on observed jobs. A small number of early job records may exist in the unique job catalog without matching observation records.
 - Similar company and title combinations can appear more than once when the source publishes separate postings with different source job IDs.
 - The project is an active portfolio project, not a production deployment.
@@ -413,11 +460,8 @@ conn.close()
 
 ## Future Improvements
 
-- UK comparison dashboards
-- more role categories
-- more robust skill extraction with NLP
-- LLM-assisted weekly report generation
-- PostgreSQL `pgvector` based semantic search
 - Docker Compose setup
 - Airflow orchestration
-- CI checks for dbt build
+- LLM-assisted weekly report generation
+- RAG or semantic search over job descriptions
+- CI checks for dbt build and tests
