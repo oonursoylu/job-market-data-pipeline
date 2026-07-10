@@ -80,14 +80,14 @@ The current working pipeline supports:
 
 ## Latest Verified Local Snapshot
 
-As of 2026-06-28, the latest verified local snapshot contains:
+As of 2026-07-10, the latest verified local snapshot contains:
 
 ```text
-raw.job_postings: 1,559 unique source job postings
-raw.job_posting_observations: 5,700 observations
+raw.job_postings: 2,382 unique source job postings
+raw.job_posting_observations: 8,400 observations
 ```
 
-Observation coverage for 2026-06-28:
+Observation coverage for 2026-07-10:
 
 ```text
 de / data_engineer: 150
@@ -102,24 +102,24 @@ Latest dbt validation:
 
 ```text
 dbt build completed successfully
-PASS=116 WARN=0 ERROR=0 SKIP=0 TOTAL=116
+PASS=133 WARN=0 ERROR=0 SKIP=0 TOTAL=133
 ```
 
 Current skill extraction snapshot:
 
 ```text
-analytics.int_job_posting_skills: 368 job-skill matches
-matched job postings: 249
-matched skills: 21
-analytics.mart_skill_demand_dashboard: 62 dashboard-ready skill rows
+analytics.int_job_posting_skills: 562 job-skill matches
+matched job postings: 373
+matched skills: 24
+analytics.mart_skill_demand_dashboard: 72 dashboard-ready skill rows
 ```
 
-Latest observed posting catalog as of 2026-06-28:
+Latest observed posting catalog as of 2026-07-10:
 
 ```text
-source postings: 1,555
-deduplicated analytical posting groups: 1,009
-potential multi-location inflation: 546
+source postings: 2,378
+deduplicated analytical posting groups: 1,525
+potential multi-location inflation: 853
 ```
 
 These numbers are a local development snapshot and will change as the pipeline is run on later dates.
@@ -164,14 +164,14 @@ Location is intentionally not part of this grouping key, because location is oft
 
 This is not perfect deduplication. It is a practical analytical heuristic for reducing overcounting in dashboards and reporting while still keeping the original source job IDs available.
 
-As of the latest verified local snapshot on 2026-06-28, the latest postings mart shows:
+As of the latest verified local snapshot on 2026-07-10, the latest postings mart shows:
 
 ```text
-source job IDs: 1,555
-analytical posting groups: 1,009
-estimated duplicate-like inflation: 546
-location-driven inflation rows: 468
-same-location duplicate-like rows: 78
+source job IDs: 2,378
+analytical posting groups: 1,525
+estimated duplicate-like inflation: 853
+location-driven inflation rows: 694
+same-location duplicate-like rows: 159
 ```
 
 Most of the detected inflation in that snapshot was location-driven, which matched the issue found during validation.
@@ -187,7 +187,7 @@ This makes it possible to compare the raw source signal with a cleaner analytica
 
 During validation, one downstream mart became much slower after the posting group logic was added. The reason was that `int_job_posting_groups` was initially materialized as a view, so downstream models had to repeatedly recompute the normalization and hashing logic.
 
-I changed `int_job_posting_groups` to a table because it is a reusable intermediate model, not just a one-off query. In local validation, this reduced the `mart_latest_postings` build time from around 220 seconds to about 6-10 seconds.
+I changed `int_job_posting_groups` to a table because it is a reusable intermediate model, not just a one-off query. In local validation, this reduced the `mart_latest_postings` build time from around 220 seconds to under 20 seconds in the latest verified run.
 
 ## Streamlit Dashboard
 
@@ -213,6 +213,8 @@ For skill insights, the main dashboard ranking uses deduplicated posting group c
 Skill trend charts use complete extraction dates only, where all country and role segments were collected. This avoids showing early partial runs as false demand growth.
 
 ## Dashboard Preview
+
+Screenshots captured on 2026-06-29. They are included as a visual preview of the Streamlit dashboard and may not show the latest local data refresh.
 
 ### Overview and Role Demand
 
