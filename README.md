@@ -1,130 +1,97 @@
-# Job Market Data Pipeline
+# Germany & UK Data / AI Job Market Pipeline
 
-> Status: Active development. This is a portfolio data engineering project built step by step to practice API ingestion, raw data archiving, PostgreSQL loading, dbt modeling, data quality checks, and analytics reporting.
+An end-to-end, production-inspired batch data pipeline that collects recurring Data and AI job-market snapshots from the Adzuna API, preserves raw JSONL records, loads them idempotently into PostgreSQL, models them with dbt, and serves deduplication-aware insights through Streamlit.
 
-## Project Overview
+> **Status:** Active development. The core manual batch workflow is operational and accumulating historical data. Backup and restore, Docker-based reproducibility, and Airflow orchestration are the next engineering milestones.
 
-This project collects Data and AI job postings from the Adzuna API, archives the raw JSON responses locally, loads the data into PostgreSQL, models it with dbt, and serves the results through a Streamlit dashboard.
+**Stack:** Python 3.12 · PostgreSQL · dbt Core · Streamlit · Plotly · JSONL
 
-The project started with Germany to keep the first version focused. After validating the raw ingestion and load design, the pipeline was expanded to include the United Kingdom for country-level comparison.
+## At a Glance
 
-Current scope:
+| Metric | Latest verified value |
+|---|---:|
+| Latest validated batch | 2026-07-30 |
+| Markets | Germany and United Kingdom |
+| Search segments | 2 countries × 3 role groups |
+| Observations per complete batch | 900 |
+| Historical observations | 12,000 |
+| Unique raw source postings | 3,382 |
+| Deduplicated analytical posting groups | 2,100 |
+| Complete six-segment batch dates | 13 |
+| Latest dbt build | 133/133 passed |
 
-- Countries: Germany (`de`) and United Kingdom (`gb`)
-- Roles: Data Engineer, Analytics Engineer, AI Engineer
-- Collection depth: 3 pages per role and country, 50 records per page
-- Source: Adzuna API
-- Raw archive format: local JSONL files
-- Database: PostgreSQL
-- Transformation layer: dbt Core
+The project focuses on Data Engineer, Analytics Engineer, and AI Engineer roles. Each complete batch collects three pages of 50 results for every country and role combination.
 
-## Why This Project
+## Architecture
 
-The goal is to build a small but realistic recurring batch data pipeline instead of working only with a static dataset.
-
-The project is designed to demonstrate practical data engineering patterns:
-
-- extracting data from an external API
-- preserving raw API responses
-- loading data into a relational database
-- handling duplicates safely
-- separating raw job entities from daily search observations
-- validating source freshness and data quality with dbt
-- preparing the data for market insights such as role demand and skill demand
-
-## Why Germany First
-
-Germany was the initial focus because it keeps the project scope manageable while staying close to the target job market. Starting with one country made it easier to validate the ingestion logic, raw archive design, database schema, duplicate handling, and dbt setup before expanding to another market.
-
-The United Kingdom was added after the first raw pipeline was working, which allows future Germany vs UK comparisons without changing the core pipeline design.
-
-## Why PostgreSQL
-
-PostgreSQL is used as the main database because it supports practical data engineering patterns such as raw data storage, JSONB columns, duplicate handling, indexing, constraints, backups, and exports.
-
-It also keeps the project local, reproducible, and sustainable without relying on cloud trials or billing. If the project later adds semantic search or RAG, PostgreSQL can also be extended with `pgvector`.
-
-## Current Pipeline
-
-```text
-Adzuna API
--> Python ingestion
--> Local JSONL raw archive
--> PostgreSQL raw schema
--> dbt sources and staging models
--> dbt tests and freshness checks
--> dbt intermediate skill extraction
--> dbt fact and mart models
--> Streamlit dashboard
+```mermaid
+flowchart LR
+    A["Adzuna API"] --> B["Python extraction"]
+    B --> C["Partitioned JSONL archive"]
+    C --> D["Python load"]
+    D --> E[("PostgreSQL raw schema")]
+    E --> F["dbt staging models"]
+    F --> G["dbt intermediate models"]
+    G --> H["dbt facts and marts"]
+    H --> I["Streamlit + Plotly dashboard"]
+    E --> J["Source freshness checks"]
+    G --> K["dbt data tests"]
 ```
 
-The current working pipeline supports:
-
-- fetching real job postings from the Adzuna API
-- collecting data for Germany and the UK
-- running extracts for Data Engineer, Analytics Engineer, and AI Engineer roles
-- writing raw API job records to local JSONL archive files
-- reading JSONL archive files back into Python
-- mapping Adzuna job fields into PostgreSQL table columns
-- loading records into PostgreSQL
-- keeping unique job postings in PostgreSQL with `ON CONFLICT DO NOTHING`
-- recording country, role, and date level sightings in `raw.job_posting_observations`
-- defining raw PostgreSQL tables as dbt sources
-- running dbt source freshness checks
-- building dbt staging views
-- extracting job-skill pairs with a controlled dbt seed dictionary
-- creating an analytical posting group grain to reduce multi-location overcounting
-- building daily fact tables and reporting marts for role, skill, and latest posting analysis
-- visualizing role demand, skill demand, multi-location inflation, and latest postings in Streamlit
-- testing dbt models with generic tests
-
-## Latest Verified Local Snapshot
-
-As of 2026-07-10, the latest verified local snapshot contains:
+Raw API responses are retained outside Git at:
 
 ```text
-raw.job_postings: 2,382 unique source job postings
-raw.job_posting_observations: 8,400 observations
+data/raw/adzuna/
+  country=XX/
+    search_role=ROLE/
+      date=YYYY-MM-DD/
+        jobs.jsonl
 ```
 
-Observation coverage for 2026-07-10:
+This provides a replayable source archive while PostgreSQL supports relational constraints, observation history, transformation, and reporting.
+
+## Latest Validated Run
+
+The batch completed on **2026-07-30** with:
 
 ```text
-de / data_engineer: 150
-de / analytics_engineer: 150
-de / ai_engineer: 150
-gb / data_engineer: 150
-gb / analytics_engineer: 150
-gb / ai_engineer: 150
-```
-
-Latest dbt validation:
-
-```text
-dbt build completed successfully
+900 job observations fetched and archived
+284 new unique source postings inserted
+616 existing source postings safely skipped
+900 observations inserted
+0 duplicate observations
+0 orphan observations
+2/2 dbt sources fresh
 PASS=133 WARN=0 ERROR=0 SKIP=0 TOTAL=133
 ```
 
-Current skill extraction snapshot:
+After the run, the database contained:
 
 ```text
-analytics.int_job_posting_skills: 562 job-skill matches
-matched job postings: 373
-matched skills: 24
-analytics.mart_skill_demand_dashboard: 72 dashboard-ready skill rows
+raw.job_postings: 3,382 unique source postings
+raw.job_posting_observations: 12,000 historical observations
+analytics.mart_latest_postings: 3,378 observed postings
+deduplicated analytical posting groups: 2,100
 ```
 
-Latest observed posting catalog as of 2026-07-10:
+The four-row difference between the raw posting catalog and the latest-postings mart comes from early development records that predate the observation-history workflow.
 
-```text
-source postings: 2,378
-deduplicated analytical posting groups: 1,525
-potential multi-location inflation: 853
-```
+## What This Project Demonstrates
 
-These numbers are a local development snapshot and will change as the pipeline is run on later dates.
+- API ingestion with pagination, request timeouts, and credential isolation
+- date-, country-, and role-partitioned raw data archiving
+- idempotent PostgreSQL loading with database constraints
+- separation of source job entities from recurring search observations
+- dbt staging, intermediate, fact, and mart layers
+- source freshness checks plus generic and custom data tests
+- dictionary-based skill extraction with a controlled dbt seed
+- deduplication-aware analytics for multi-location postings
+- dashboard-ready datasets and interactive Streamlit reporting
+- honest handling of incomplete source coverage and analytical uncertainty
 
-## PostgreSQL Raw Design
+## Key Engineering Decisions
+
+### Separate job entities from observations
 
 The raw layer contains two main tables:
 
@@ -133,162 +100,117 @@ raw.job_postings
 raw.job_posting_observations
 ```
 
-`raw.job_postings` stores one row per unique source job posting. Duplicate jobs are skipped with a database constraint and `ON CONFLICT DO NOTHING`.
+`raw.job_postings` stores one row per unique `source + job_id`. `raw.job_posting_observations` records when that posting was seen for a country, role, and extraction date.
 
-`raw.job_posting_observations` stores when a job posting was seen for a specific country, role, and extraction date. This separates the job entity from the search event and makes the pipeline safer to rerun.
+This prevents repeated batches from duplicating the job catalog while preserving a time series of market observations.
 
-This design supports two important use cases:
+### Make reruns safe
 
-- keeping a unique job posting catalog
-- building time-series demand signals from repeated observations
+Postings and observations use database uniqueness constraints with `ON CONFLICT DO NOTHING`. Re-running the same load therefore skips existing job entities and same-day observations instead of creating duplicates.
 
-## Handling Multi-Location Posting Inflation
+### Preserve the raw grain and deduplicate analytically
 
-While validating the job posting data, I noticed that source-level job counts can be inflated by multi-location postings. The same company or recruiter can publish the same role across many cities, and each location may appear with a different source `job_id`.
+Adzuna can return the same apparent opportunity under multiple source job IDs or locations. The raw source grain remains unchanged for traceability.
 
-I kept the raw source grain unchanged:
-
-```text
-source + job_id
-```
-
-This keeps the original Adzuna records traceable and avoids changing the meaning of the raw layer.
-
-For analytics, I added a separate dbt model called `int_job_posting_groups`. This model creates an analytical `posting_group_id` using:
+For reporting, `int_job_posting_groups` creates an analytical `posting_group_id` from:
 
 ```text
-source + search_country + normalized_company_name + normalized_job_title + description_hash
+source
++ search_country
++ normalized_company_name
++ normalized_job_title
++ description_hash
 ```
 
-Location is intentionally not part of this grouping key, because location is often what creates the repeated postings in the first place.
+Location is intentionally excluded because it is often the source of repeated postings. This is a practical heuristic rather than a claim of perfect real-world job identity resolution.
 
-This is not perfect deduplication. It is a practical analytical heuristic for reducing overcounting in dashboards and reporting while still keeping the original source job IDs available.
-
-As of the latest verified local snapshot on 2026-07-10, the latest postings mart shows:
+Downstream models retain both perspectives:
 
 ```text
-source job IDs: 2,378
-analytical posting groups: 1,525
-estimated duplicate-like inflation: 853
-location-driven inflation rows: 694
-same-location duplicate-like rows: 159
+source posting counts
+deduplicated analytical posting-group counts
 ```
 
-Most of the detected inflation in that snapshot was location-driven, which matched the issue found during validation.
+### Use complete batches for trends
 
-The downstream dbt models now keep both metrics side by side:
+Missed extraction dates are not treated as zero demand. Skill trend charts use only dates where all six country-role segments were collected, preventing partial batches from appearing as false market changes.
 
-```text
-source-level counts
-deduplicated posting group counts
-```
+### Materialize reusable heavy transformations
 
-This makes it possible to compare the raw source signal with a cleaner analytical estimate of job opportunities.
+The posting-group model was initially a view. Repeated normalization and hashing made a downstream mart take roughly 220 seconds during local validation.
 
-During validation, one downstream mart became much slower after the posting group logic was added. The reason was that `int_job_posting_groups` was initially materialized as a view, so downstream models had to repeatedly recompute the normalization and hashing logic.
+Materializing the reusable intermediate model as a table reduced the same workload substantially; the latest full dbt build completed in approximately 35 seconds.
 
-I changed `int_job_posting_groups` to a table because it is a reusable intermediate model, not just a one-off query. In local validation, this reduced the `mart_latest_postings` build time from around 220 seconds to under 20 seconds in the latest verified run.
+## Data Model
 
-## Streamlit Dashboard
+| Layer | Models |
+|---|---|
+| Raw sources | `job_postings`, `job_posting_observations` |
+| Staging | `stg_job_postings`, `stg_job_posting_observations` |
+| Intermediate | `int_job_posting_skills`, `int_job_posting_groups` |
+| Facts | `fct_role_demand_daily`, `fct_skill_demand_daily` |
+| Marts | `mart_country_role_skill_demand`, `mart_latest_postings`, `mart_skill_demand_dashboard` |
+| Seed | `skill_dictionary` |
 
-The project includes a local Streamlit dashboard that makes the dbt marts easier to inspect.
+The current skill extraction snapshot contains 772 job-skill matches across 500 postings, with 25 distinct skills represented in the data.
 
-The dashboard currently shows:
+## Data Quality
 
-- headline metrics for source postings, deduplicated opportunities, and potential multi-location inflation
-- role demand by country and role, comparing source-level postings with deduplicated analytical groups
-- top multi-location posting groups, useful for auditing why source counts can be inflated
-- deduplicated skill demand rankings and skill trends across extraction dates
-- latest observed postings with filters for country, role, and text search
+The dbt project currently runs **123 data tests** across nine models and one seed. Coverage includes:
 
-The dashboard intentionally keeps both perspectives visible:
+- `not_null`
+- `unique`
+- `accepted_values`
+- `relationships`
+- source freshness
+- custom assertions ensuring deduplicated counts do not exceed source counts
 
-```text
-source postings = original source-level job records
-estimated opportunities = deduplicated analytical posting groups
-```
+PostgreSQL adds primary keys, foreign keys, uniqueness constraints, indexes, and a salary-range check at the raw layer.
 
-For skill insights, the main dashboard ranking uses deduplicated posting group counts. This prevents a repeated multi-location job posting from inflating the apparent demand for skills such as Python, SQL, Azure, or AWS.
+Additional raw-layer checks are available in [`sql/002_raw_data_quality_checks.sql`](sql/002_raw_data_quality_checks.sql).
 
-Skill trend charts use complete extraction dates only, where all country and role segments were collected. This avoids showing early partial runs as false demand growth.
+## Dashboard
 
-## Dashboard Preview
+The Streamlit dashboard provides:
 
-Screenshots captured on 2026-06-29. They are included as a visual preview of the Streamlit dashboard and may not show the latest local data refresh.
+- source postings versus deduplicated analytical groups
+- country and role demand comparisons
+- multi-location inflation auditing
+- deduplicated skill rankings and trends
+- filters for country, role, and time window
+- a searchable latest-postings table
 
-### Overview and Role Demand
+### Dashboard milestone preview
+
+The screenshots below were captured on **2026-06-29** using data through **2026-06-28**. They demonstrate the working interface and are not intended to mirror every later batch refresh. Screenshots are updated when the dashboard changes materially or when a new portfolio milestone is published.
+
+#### Overview and role demand
 
 ![Dashboard overview and role demand](docs/screenshots/dashboard_overview_role_demand.png)
 
-### Skill Demand
+#### Skill demand
 
 ![Dashboard skill demand](docs/screenshots/dashboard_skill_demand.png)
 
-### Multi-Location Posting Groups
+<details>
+<summary><strong>Additional view: multi-location posting groups</strong></summary>
 
 ![Dashboard multi-location posting groups](docs/screenshots/dashboard_multilocation_groups.png)
 
-## dbt Layer
-
-The first dbt layer has been added on top of the PostgreSQL raw schema.
-
-Implemented so far:
-
-- dbt project setup with PostgreSQL connection
-- source definitions for:
-  - `raw.job_postings`
-  - `raw.job_posting_observations`
-- source freshness checks using:
-  - `loaded_at` for job postings
-  - `observed_at` for observations
-- staging models:
-  - `stg_job_postings`
-  - `stg_job_posting_observations`
-- seed data:
-  - `skill_dictionary`
-- intermediate models:
-  - `int_job_posting_skills`
-  - `int_job_posting_groups`
-- fact models:
-  - `fct_role_demand_daily`
-  - `fct_skill_demand_daily`
-- mart models:
-  - `mart_country_role_skill_demand`
-  - `mart_latest_postings`
-- generic dbt tests:
-  - `not_null`
-  - `unique`
-  - `accepted_values`
-  - `relationships`
-
-The staging layer currently preserves the raw grain while cleaning text fields, deriving a posting date, and making the observation grain explicit with a deterministic `observation_id`.
-
-The first intermediate model maps job descriptions to normalized skills using a small dictionary-based approach. This keeps the skill extraction logic easy to inspect and leaves more advanced NLP or LLM-based extraction as a later improvement.
-
-The posting group intermediate model assigns an analytical group ID to source job postings so downstream marts can reduce multi-location overcounting while still preserving source `job_id` traceability.
-
-The current mart layer includes daily role demand, daily skill demand, a country-role-skill summary, and a latest postings table for dashboard use.
-
-<details>
-<summary><strong>Generate dbt docs and lineage locally</strong></summary>
-
-Run the docs server from the dbt project directory:
-
-```powershell
-cd dbt_job_market
-dbt docs generate
-dbt docs serve
-```
-
-When the server is running, open the local docs site in a browser:
-
-```text
-http://localhost:8080
-```
-
-The lineage graph is available from the docs overview page. The local address only works while `dbt docs serve` is running on the same machine.
-
 </details>
+
+## Technology Choices
+
+| Technology | Role in the project |
+|---|---|
+| Python | API extraction, archive writing, mapping, and PostgreSQL loading |
+| PostgreSQL | Raw storage, constraints, JSONB retention, and analytical persistence |
+| dbt Core | Transformation, documentation, lineage, freshness, and testing |
+| Streamlit | Local interactive analytics application |
+| Plotly | Role and skill-demand visualizations |
+| JSONL | Simple, replayable raw API archive |
+
+PostgreSQL keeps the project sustainable without cloud trial limits or billing. It also leaves a natural path to `pgvector` if semantic search becomes justified later.
 
 ## Project Structure
 
@@ -303,9 +225,6 @@ src/
     job_mapper.py
     postgres_loader.py
     run_postgres_load.py
-  transform/
-  reports/
-  utils/
 sql/
   001_create_raw_schema.sql
   002_raw_data_quality_checks.sql
@@ -315,171 +234,98 @@ dbt_job_market/
     intermediate/
     marts/
   seeds/
-    skill_dictionary.csv
   tests/
-  macros/
 dashboard/
   app.py
 data/
   raw/
+backups/
 reports/
   weekly/
 docs/
   screenshots/
-  linkedin_posts/
 ```
 
-## Environment Variables
+Raw archives, database backups, logs, virtual environments, generated dbt artifacts, and secrets are excluded from Git.
 
-Create a local `.env` file based on `.env.example`.
+## Running Locally
 
-Required values:
+The project currently targets Windows PowerShell and Python 3.12.
 
-```text
-ADZUNA_APP_ID=
-ADZUNA_APP_KEY=
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=job_market
-POSTGRES_USER=job_market_user
-POSTGRES_PASSWORD=
-DEFAULT_COUNTRIES=de,gb
-DEFAULT_RESULTS_PER_PAGE=50
-DEFAULT_MAX_PAGES=3
-```
-
-The real `.env` file is ignored by Git.
-
-The current ingestion scripts define the active country and pagination scope directly in the Python entry points. The ingestion default variables are kept as a planned parameterization point.
-
-## How To Run
-
-Run the extract step:
+### 1. Create the environment
 
 ```powershell
-python src\extract\run_adzuna_extract.py
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-Run the PostgreSQL load step:
+### 2. Configure credentials
+
+Copy `.env.example` to `.env` and provide the local Adzuna and PostgreSQL values. The real `.env` file must remain outside Git.
+
+dbt also expects a local profile named `dbt_job_market` that targets the PostgreSQL `analytics` schema. The profile is stored outside this repository.
+
+### 3. Initialize the raw schema
+
+After creating the local database and user, apply the raw PostgreSQL schema:
 
 ```powershell
-python src\load\run_postgres_load.py
+psql -h localhost -U job_market_user -d job_market -f .\sql\001_create_raw_schema.sql
 ```
 
-Run dbt from the dbt project directory:
-
-```powershell
-cd dbt_job_market
-dbt source freshness
-dbt build
-```
-
-Run the Streamlit dashboard from the project root:
-
-```powershell
-cd ..
-streamlit run dashboard\app.py
-```
-
-The dashboard expects the PostgreSQL database and dbt marts to exist locally. Run the extract, load, and dbt steps first if the tables are missing or stale.
-
-## Recurring Manual Run Before Airflow
-
-Airflow has not been added yet. Until orchestration is implemented, the pipeline is run as a recurring manual batch a few times per week:
+### 4. Run the recurring batch
 
 ```powershell
 python src\extract\run_adzuna_extract.py
 python src\load\run_postgres_load.py
-cd dbt_job_market
-dbt source freshness
-dbt build
-cd ..
+dbt source freshness --project-dir .\dbt_job_market
+dbt build --project-dir .\dbt_job_market
 ```
 
-The load step is designed to be safe to rerun. Existing job postings and duplicate same-day observations are skipped by database constraints.
-
-The dbt marts are keyed by extraction dates. Missing dates mean the batch was not run, not that market demand was zero.
-
-## Useful Validation Queries
-
-Check the raw table counts:
+### 5. Open the dashboard
 
 ```powershell
-@'
-import sys
-
-sys.path.append("src/load")
-
-from postgres_loader import get_connection
-
-conn = get_connection()
-cur = conn.cursor()
-
-cur.execute("SELECT COUNT(*) FROM raw.job_postings")
-print("raw.job_postings:", cur.fetchone()[0])
-
-cur.execute("SELECT COUNT(*) FROM raw.job_posting_observations")
-print("raw.job_posting_observations:", cur.fetchone()[0])
-
-cur.close()
-conn.close()
-'@ | python -
+python -m streamlit run dashboard\app.py
 ```
 
-Check today's observation counts by country and role:
+The dashboard expects PostgreSQL and the dbt marts to be available locally.
+
+<details>
+<summary><strong>Generate dbt documentation and lineage</strong></summary>
 
 ```powershell
-@'
-import sys
-
-sys.path.append("src/load")
-
-from postgres_loader import get_connection
-
-conn = get_connection()
-cur = conn.cursor()
-
-cur.execute("""
-    SELECT search_country, search_role, extract_date, COUNT(*)
-    FROM raw.job_posting_observations
-    WHERE extract_date = CURRENT_DATE
-    GROUP BY search_country, search_role, extract_date
-    ORDER BY search_country, search_role
-""")
-
-for row in cur.fetchall():
-    print(row)
-
-cur.close()
-conn.close()
-'@ | python -
+dbt docs generate --project-dir .\dbt_job_market
+dbt docs serve --project-dir .\dbt_job_market
 ```
 
-## Next Steps
+The generated documentation is available locally at `http://localhost:8080` while the server is running.
 
-- continue recurring manual ingestion before Airflow
-- add dashboard screenshots to the README
-- review location values before adding a location demand mart
-- generate a weekly Markdown market report
-- add Airflow orchestration
-- add Docker Compose later for reproducibility
+</details>
 
 ## Limitations
 
-- The Adzuna API may not represent the full job market.
-- Each run currently fetches a capped sample of 150 postings per country and role.
-- Salary information is often missing or incomplete in job postings.
-- The first skill extraction layer will be dictionary-based and may miss some skills or create false positives.
-- The posting group logic is a practical analytical heuristic, not a perfect real-world job identity resolver.
-- Latest-postings marts are based on observed jobs. A small number of early job records may exist in the unique job catalog without matching observation records.
-- Similar company and title combinations can appear more than once when the source publishes separate postings with different source job IDs.
-- The project is an active portfolio project, not a production deployment.
-- Missed ingestion days are not backfilled with synthetic observations.
+- Adzuna is one source and does not represent the full German or UK job market.
+- Each batch is capped at 150 results per country-role segment.
+- Skill extraction is dictionary-based and may miss context, aliases, or uncommon technologies.
+- Analytical posting groups reduce obvious multi-location inflation but are not perfect entity resolution.
+- Salary availability is uneven across countries and currency metadata is absent in the current source payloads, so salary comparisons are intentionally not presented.
+- The pipeline is currently scheduled manually. Missing dates mean no batch was run; observations are never synthetically backfilled.
+- This is an actively developed portfolio system, not a production deployment.
 
-## Future Improvements
+## Roadmap
 
-- Docker Compose setup
-- Airflow orchestration
-- LLM-assisted weekly report generation
-- RAG or semantic search over job descriptions
-- CI checks for dbt build and tests
+The next milestones are intentionally ordered around data reliability before adding AI features:
+
+1. create and verify PostgreSQL backup and restore procedures
+2. add Docker Compose with PostgreSQL, a named volume, and a health check
+3. validate a parallel migration without risking the existing local database
+4. evaluate containerization of the Python/dbt workflow and Streamlit
+5. add Airflow orchestration with retries, timeouts, logging, and explicit failure behavior
+6. generate a deterministic weekly Markdown market report
+7. add CI checks for dbt build and data tests
+8. consider LLM-assisted reporting and a grounded `pgvector` RAG workflow only after the core pipeline is reliable
+
+## License
+
+This project is available under the [MIT License](LICENSE).
