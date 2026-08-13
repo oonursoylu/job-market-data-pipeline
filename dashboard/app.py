@@ -294,9 +294,38 @@ st.subheader("Role Demand")
 
 role_demand = load_role_demand()
 
+country_sort_order = {
+    "de": 1,
+    "gb": 2,
+}
+
+role_sort_order = {
+    "data_engineer": 1,
+    "analytics_engineer": 2,
+    "ai_engineer": 3,
+}
+
+role_demand["country_sort_order"] = (
+    role_demand["search_country"].map(country_sort_order)
+)
+role_demand["role_sort_order"] = (
+    role_demand["search_role"].map(role_sort_order)
+)
+
+role_demand = (
+    role_demand
+    .sort_values(
+        ["country_sort_order", "role_sort_order"],
+        kind="stable",
+    )
+    .reset_index(drop=True)
+)
+
 role_demand["country"] = role_demand["search_country"].map(COUNTRY_LABELS)
 role_demand["role"] = role_demand["search_role"].map(ROLE_LABELS)
 role_demand["segment"] = role_demand["country"] + " / " + role_demand["role"]
+
+segment_order = role_demand["segment"].tolist()
 
 role_chart_data = role_demand.melt(
     id_vars=["segment"],
@@ -318,6 +347,13 @@ fig = px.bar(
     y="posting_count",
     color="metric",
     barmode="group",
+    category_orders={
+        "segment": segment_order,
+        "metric": [
+            "Source postings",
+            "Estimated opportunities",
+        ],
+    },
     labels={
         "segment": "Country / Role",
         "posting_count": "Postings",

@@ -10,14 +10,14 @@ An end-to-end, production-inspired batch data pipeline that collects recurring D
 
 | Metric | Latest verified value |
 |---|---:|
-| Latest validated batch | 2026-07-30 |
+| Latest validated batch | 2026-08-13 |
 | Markets | Germany and United Kingdom |
 | Search segments | 2 countries × 3 role groups |
 | Observations per complete batch | 900 |
-| Historical observations | 12,000 |
-| Unique raw source postings | 3,382 |
-| Deduplicated analytical posting groups | 2,100 |
-| Complete six-segment batch dates | 13 |
+| Historical observations | 13,800 |
+| Unique raw source postings | 3,897 |
+| Deduplicated analytical posting groups | 2,398 |
+| Complete six-segment batch dates | 15 |
 | Latest dbt build | 133/133 passed |
 
 The project focuses on Data Engineer, Analytics Engineer, and AI Engineer roles. Each complete batch collects three pages of 50 results for every country and role combination.
@@ -52,12 +52,12 @@ This provides a replayable source archive while PostgreSQL supports relational c
 
 ## Latest Validated Run
 
-The batch completed on **2026-07-30** with:
+The batch completed on **2026-08-13** with:
 
 ```text
 900 job observations fetched and archived
-284 new unique source postings inserted
-616 existing source postings safely skipped
+254 new unique source postings inserted
+646 existing source postings safely skipped
 900 observations inserted
 0 duplicate observations
 0 orphan observations
@@ -68,10 +68,10 @@ PASS=133 WARN=0 ERROR=0 SKIP=0 TOTAL=133
 After the run, the database contained:
 
 ```text
-raw.job_postings: 3,382 unique source postings
-raw.job_posting_observations: 12,000 historical observations
-analytics.mart_latest_postings: 3,378 observed postings
-deduplicated analytical posting groups: 2,100
+raw.job_postings: 3,897 unique source postings
+raw.job_posting_observations: 13,800 historical observations
+analytics.mart_latest_postings: 3,893 observed postings
+deduplicated analytical posting groups: 2,398
 ```
 
 The four-row difference between the raw posting catalog and the latest-postings mart comes from early development records that predate the observation-history workflow.
@@ -152,7 +152,7 @@ Materializing the reusable intermediate model as a table reduced the same worklo
 | Marts | `mart_country_role_skill_demand`, `mart_latest_postings`, `mart_skill_demand_dashboard` |
 | Seed | `skill_dictionary` |
 
-The current skill extraction snapshot contains 772 job-skill matches across 500 postings, with 25 distinct skills represented in the data.
+The current skill extraction snapshot contains 904 job-skill matches across 584 postings, with 26 distinct skills represented in the data.
 
 ## Data Quality
 
