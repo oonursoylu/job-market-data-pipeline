@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: int_job_posting_skills
-    description: "Intermediate model that maps job postings to skills found in job descriptions using a controlled dictionary."
+    description: "Table of skill matches from job descriptions using a controlled dictionary. Rebuilt by dbt so tests and dashboard reads reuse the results. Run dbt after loading new postings or updating the dictionary."
     columns:
       - name: job_skill_id
         description: "Deterministic identifier for a job posting and matched skill."

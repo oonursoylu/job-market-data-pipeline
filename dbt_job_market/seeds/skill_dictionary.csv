@@ -7,24 +7,48 @@ airflow,orchestration,airflow
 dagster,orchestration,dagster
 prefect,orchestration,prefect
 dbt,transformation,dbt
-spark,big_data,spark
+spark,big_data,spark|pyspark
 kafka,big_data,kafka
 snowflake,warehouse,snowflake
 bigquery,warehouse,bigquery
 redshift,warehouse,redshift
-postgresql,database,postgresql
+postgresql,database,postgresql|postgres
 mysql,database,mysql
 mongodb,database,mongodb
 aws,cloud,aws
 azure,cloud,azure
-gcp,cloud,gcp
+gcp,cloud,gcp|google cloud|google cloud platform
 docker,devops,docker
-kubernetes,devops,kubernetes
+kubernetes,devops,kubernetes|k8s
 terraform,devops,terraform
 tableau,bi,tableau
-power bi,bi,power bi
+power bi,bi,power bi|powerbi
 looker,bi,looker
 machine learning,ai,machine learning
 tensorflow,ai,tensorflow
 pytorch,ai,pytorch
 mlflow,mlops,mlflow
+databricks,warehouse,databricks
+microsoft fabric,warehouse,microsoft fabric|ms fabric
+delta lake,big_data,delta lake
+unity catalog,warehouse,unity catalog
+azure data factory,orchestration,azure data factory
+synapse,warehouse,azure synapse|synapse analytics
+excel,bi,excel
+dax,bi,dax
+power query,bi,power query|powerquery
+sql server,database,sql server|mssql
+git,devops,git
+github actions,devops,github actions
+ci/cd,devops,ci cd|cicd|continuous integration|continuous delivery
+pandas,programming,pandas
+numpy,programming,numpy
+scikit-learn,ai,scikit learn|sklearn
+a/b testing,ai,a b testing|a b test|ab testing|split testing
+experimentation,ai,experimentation|experimental design|design of experiments
+statistics,ai,statistics|statistical analysis|hypothesis testing
+forecasting,ai,forecasting|time series
+data modelling,transformation,data modelling|data modeling|dimensional modelling|dimensional modeling
+data quality,transformation,data quality
+etl/elt,transformation,etl|elt
+llm,ai,llm|llms|large language model|large language models

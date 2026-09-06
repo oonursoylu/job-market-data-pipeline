@@ -1,4 +1,4 @@
-{{ config(materialized='view') }}
+{{ config(materialized='table') }}
 
 with job_postings as (
 
@@ -42,7 +42,11 @@ matched_skills as (
 
     from job_postings
     inner join skills
-        on job_postings.normalized_description like '% ' || skills.pattern || ' %'
+        on exists (
+            select 1
+            from unnest(string_to_array(skills.pattern, '|')) as aliases(alias)
+            where job_postings.normalized_description like '% ' || trim(aliases.alias) || ' %'
+        )
 
 )
 

@@ -30,6 +30,6 @@ seeds:
                   - mlops
 
       - name: pattern
-        description: "Text pattern used to match the skill in job descriptions."
+        description: "Pipe-separated normalised phrase alternatives. Matching uses word boundaries; each posting counts once per skill."
         data_tests:
           - not_null
