@@ -10,6 +10,7 @@ SEARCH_ROLES = {
     "data_engineer": "data engineer",
     "analytics_engineer": "analytics engineer",
     "ai_engineer": "ai engineer",
+    "data_analyst": "data analyst",
 }
 
 
