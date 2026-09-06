@@ -62,29 +62,19 @@ observation_summary as (
 
 latest_observation as (
 
-    select
+    -- Keep the latest observation with the existing tie-break order.
+    select distinct on (source, job_id)
         source,
         job_id,
         search_country,
         search_role,
         extract_date
 
-    from (
-        select
-            source,
-            job_id,
-            search_country,
-            search_role,
-            extract_date,
-            row_number() over (
-                partition by source, job_id
-                order by extract_date desc, observed_at desc, search_country, search_role
-            ) as row_number
+    from observations
 
-        from observations
-    ) ranked_observations
-
-    where row_number = 1
+    order by
+        source, job_id,
+        extract_date desc, observed_at desc, search_country, search_role
 
 ),
 
