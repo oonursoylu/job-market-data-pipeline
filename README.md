@@ -48,6 +48,14 @@ flowchart LR
 
 The dashboard reads dbt staging observations, stored posting groups, stored skill matches and the dictionary. Daily facts and reporting marts provide reusable reporting tables. Source freshness checks and dbt tests validate the data separately from this flow.
 
+## Backup and restore verification
+
+I verified a PostgreSQL backup by restoring it to a separate test database on 2026-09-07. All 11 tables matched the source data, including duplicate rows. Table structures, constraints, indexes, views, ownership and sequence state also matched.
+
+The checks used read-only comparisons and left the source database unchanged. This was a restore test on the same PostgreSQL 18.4 server. The backup archive is kept outside Git.
+
+See [the restore procedure and verification results](docs/backup_restore_verification.md).
+
 ## Performance improvements
 
 I investigated repeated SQL work and checked that the faster versions preserved the results. These measurements were taken locally on 2026-09-06.
@@ -162,9 +170,9 @@ Adzuna is one source with a capped sample. Collection is manual and dates are un
 
 ## Next steps
 
-Planned work, in priority order:
+Planned work, in priority order. I will learn each tool before applying it to the project. Backup and restore verification is complete; Docker and Power BI remain future learning and implementation steps.
 
-1. **Backup and Docker:** verify database backup and restore, then create a reproducible local setup with Docker Compose.
+1. **Docker:** learn the container and volume setup, then create a reproducible local environment with Docker Compose.
 2. **Data Analyst reporting:** continue collecting archives and review coverage before adding the role to the loader, dbt models and dashboard. Collection can continue while the Docker work is in progress.
 3. **Power BI:** build a report using the same counting rules as Streamlit, with checks that both reports agree.
 4. **Airflow:** schedule extraction, validation, loading and dbt builds, with retries and clear failure reporting.
