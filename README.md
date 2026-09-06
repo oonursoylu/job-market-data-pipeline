@@ -1,25 +1,33 @@
-# Germany & UK Job Market Pipeline
+# Job Market Data Pipeline
 
-A Python batch pipeline that collects job adverts from Adzuna, keeps JSONL archives, loads PostgreSQL, transforms data with dbt, and displays the results in Streamlit.
+A Python and SQL project that collects job adverts from Germany and the UK, stores historical observations in PostgreSQL, and uses dbt to prepare data for a Streamlit dashboard.
 
-**Stack:** Python · PostgreSQL · dbt Core · Streamlit · Plotly
+I built it to explore which skills appear in collected adverts and how repeated postings affect the results. The project also covers practical data engineering tasks, including safe archive handling, repeatable loading, data quality checks and query optimisation.
 
-## Current status
+**Built with:** Python · PostgreSQL · dbt Core · Streamlit · Plotly
 
-The workflow runs manually. The dashboard covers Data Engineer, Analytics Engineer and AI Engineer searches in Germany and the UK. Data Analyst collection started on 2026-09-06 and is **archive-only**: it is not loaded by the current loader or included in dbt and the dashboard.
+## What I built
 
-Verified on **2026-09-06**:
+- A batch pipeline that keeps raw API responses and tracks when each advert appears in a search.
+- Archive validation and repeatable loading, so rerunning a load does not add the same records again.
+- dbt models with 123 data tests covering missing values, uniqueness, relationships and count consistency.
+- A dashboard for comparing skill mentions, exploring adverts and inspecting repeated posting groups.
+- SQL performance improvements checked against the original results. One read query fell from 59.42 seconds to 0.25 seconds in local testing, with the same 5,002 rows.
 
-| Check | Result |
-|---|---:|
-| Skill dictionary | 53 skills |
-| Stored posting-skill matches | 2,051 |
-| Full build before skill materialization change | 9 models, 1 seed and 123 tests passed |
-| Affected build after skill materialization change | 4 models and 52 tests passed |
-| Latest-postings mart | 5,002 rows |
-| Latest dashboard snapshot, both countries and all three roles | 886 source postings, 646 analytical groups |
+The reporting workflow covers Data Engineer, Analytics Engineer and AI Engineer searches in both countries. Data Analyst collection has started separately and is not yet included in the dashboard. Collection and model refreshes currently run manually.
 
-The latest-snapshot counts differ from accumulated archive counts. Source IDs can appear in several search roles; the overview counts them once across the selected scope.
+## Dashboard
+
+The dashboard starts with the most mentioned skills and a watchlist, followed by posting counts for the selected date. Country and role filters let users narrow the sample.
+
+| View | What it shows |
+|---|---|
+| Overview | Top skills, a watchlist, and source postings compared with analytical groups |
+| Skills | Rankings, trends and all 53 tracked skills, including those with no matched mentions |
+| Explore Postings | Search by job title, company or location |
+| Data Quality | Repeated posting groups and observed collection coverage |
+
+The skill dictionary tracks technologies such as Databricks, Microsoft Fabric and Power BI alongside programming, data engineering and analytical skills. These are terms found in adverts, not tools used to build the pipeline.
 
 ## Architecture
 
@@ -34,11 +42,26 @@ flowchart LR
     G --> H[dbt facts and marts]
     F --> I[Streamlit dashboard]
     G --> I
-    E --> J[Source freshness checks]
-    G --> K[dbt data tests]
+    S[Skill dictionary] --> G
+    S --> I
 ```
 
-The dashboard reads staging observations, stored groups, stored skill matches and the dictionary. Daily facts and reporting marts remain available for other consumers. A Power BI report is planned, not implemented.
+The dashboard reads dbt staging observations, stored posting groups, stored skill matches and the dictionary. Daily facts and reporting marts provide reusable reporting tables. Source freshness checks and dbt tests validate the data separately from this flow.
+
+## Performance improvements
+
+I investigated repeated SQL work and checked that the faster versions preserved the results. These measurements were taken locally on 2026-09-06.
+
+| Change | Evidence |
+|---|---|
+| Latest-postings query uses `DISTINCT ON` | Read query: 59.421 seconds before, 0.245 seconds for the candidate. Both returned 5,002 rows with no differences in either direction. Selected dbt model build: 0.71 seconds. |
+| Store skill matches as a dbt table | View read: 24.348 seconds; temporary-table read: 0.006 seconds. All 2,051 rows matched, including duplicates. |
+| Reuse stored skill matches downstream | Daily skill fact build: 24.73 seconds before, 0.21 seconds after. |
+
+Building the skill table still took 24.55 seconds. The change removes repeated computation from reads and downstream models. Run dbt after loading new postings or updating the dictionary. The selected four-model build took 27.96 seconds; it is not directly comparable to a full build.
+
+<details>
+<summary>Data handling and calculation details</summary>
 
 ## Collection and loading
 
@@ -85,30 +108,11 @@ For multi-day skill analysis:
 
 Observed coverage does not prove every requested API page completed. The dashboard does not yet read extraction status files. Its calculation is implemented in the dashboard; existing aggregate marts should be reviewed against these rules before building Power BI measures.
 
-## Dashboard
-
-- **Overview:** top ten skills and a watchlist for the selected date, followed by source/group counts and country/role comparisons.
-- **Skills:** up to 15 ranked skills, a custom watchlist, trends and all 53 dictionary entries, including zeros. Its date window ends on the selected snapshot date.
-- **Explore Postings:** title, company and location search for the selected snapshot; displays up to 100 matching adverts.
-- **Data Quality:** repeated groups and observed collection coverage.
-
-Country and role filters apply across tabs. Database reads are cached for five minutes; use **Refresh data** after a successful dbt build. Refreshing the dashboard does not rebuild dbt tables.
-
-Older screenshots in `docs/screenshots/` show a previous interface and are not previews of this version. Updated browser screenshots are still pending.
-
-## Performance checks
-
-These are local measurements on the current dataset, not production guarantees.
-
-| Change | Evidence |
-|---|---|
-| Latest-postings query uses `DISTINCT ON` | Read query: 59.421 seconds before, 0.245 seconds for the candidate. Both returned 5,002 rows with no differences in either direction. Selected dbt model build: 0.71 seconds. |
-| Store skill matches as a dbt table | View read: 24.348 seconds; temporary-table read: 0.006 seconds. All 2,051 rows matched, including duplicates. |
-| Reuse stored skill matches downstream | Daily skill fact build: 24.73 seconds before, 0.21 seconds after. |
-
-Building the skill table still took 24.55 seconds. The change removes repeated computation from reads and downstream models. Run dbt after loading new postings or updating the dictionary. The selected four-model build took 27.96 seconds; it is not directly comparable to a full build.
+</details>
 
 ## Run locally
+
+The dashboard needs PostgreSQL and built dbt models. Its five-minute cache can be cleared with **Refresh data** after a successful build; this button does not run dbt.
 
 From the repository root in Windows PowerShell:
 
@@ -152,18 +156,20 @@ Use `--countries gb` to collect only UK archives. The current loader still expec
 
 Generate dbt documentation with `dbt docs generate --project-dir .\dbt_job_market`. Raw-layer checks are in [sql/002_raw_data_quality_checks.sql](sql/002_raw_data_quality_checks.sql).
 
-## Limitations and next steps
+## Limitations
 
 Adzuna is one source with a capped sample. Collection is manual and dates are uneven. Training and placement adverts have not been excluded. Salary comparisons are not presented because source coverage and currency information are incomplete.
 
-Next steps:
+## Next steps
 
-1. Review the rendered dashboard and update screenshots.
-2. Review Data Analyst coverage after roughly three weeks before integrating it; no automatic activation is configured.
-3. Verify backup and restore, then add a small Docker setup.
-4. Build Power BI reporting with the same documented counting rules.
+Planned work, in priority order:
 
-Airflow, CI/CD and a separate A/B testing project are deferred. Docker, Power BI and Airflow are not part of the implemented stack.
+1. **Backup and Docker:** verify database backup and restore, then create a reproducible local setup with Docker Compose.
+2. **Data Analyst reporting:** continue collecting archives and review coverage before adding the role to the loader, dbt models and dashboard. Collection can continue while the Docker work is in progress.
+3. **Power BI:** build a report using the same counting rules as Streamlit, with checks that both reports agree.
+4. **Airflow:** schedule extraction, validation, loading and dbt builds, with retries and clear failure reporting.
+5. **CI/CD:** automate code and dbt checks, then add a deployment workflow once a hosting target is chosen.
+6. **Vector search and RAG — final phase:** use PostgreSQL with pgvector to explore semantic search over collected adverts, then build a question-answering feature that cites the retrieved records. Evaluate retrieval quality and answer support, accounting for the short source descriptions. This comes after the data pipeline, reporting and automation work above.
 
 Secrets, raw archives, backups, logs, virtual environments and generated dbt artifacts are excluded from Git.
 
