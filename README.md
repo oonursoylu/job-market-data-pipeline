@@ -10,7 +10,7 @@ I built it to explore which skills appear in collected adverts and how repeated 
 
 - A batch pipeline that keeps raw API responses and tracks when each advert appears in a search.
 - Archive validation and repeatable loading, so rerunning a load does not add the same records again.
-- dbt models with 123 data tests covering missing values, uniqueness, relationships and count consistency.
+- dbt models with 145 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency.
 - A dashboard for comparing skill mentions, exploring adverts and inspecting repeated posting groups.
 - SQL performance improvements checked against the original results. One read query fell from 59.42 seconds to 0.25 seconds in local testing, with the same 5,002 rows.
 
@@ -25,7 +25,7 @@ The dashboard starts with the most mentioned skills and a watchlist, followed by
 | Overview | Top skills, a watchlist, and source postings compared with analytical groups |
 | Skills | Rankings, trends and all 53 tracked skills, including those with no matched mentions |
 | Explore Postings | Search by job title, company or location |
-| Data Quality | Repeated posting groups and observed collection coverage |
+| Data Quality | Missing-company, snippet, salary and age signals, repeated posting groups, and observed collection coverage |
 
 The skill dictionary tracks technologies such as Databricks, Microsoft Fabric and Power BI alongside programming, data engineering and analytical skills. These are terms found in adverts, not tools used to build the pipeline.
 
@@ -85,7 +85,7 @@ data/raw/adzuna/country=XX/search_role=ROLE/date=YYYY-MM-DD/
 
 - Existing archives or extraction status files block another extraction for that segment and date.
 - JSONL is written through a temporary file without replacing an existing archive.
-- New status files record requested pages, per-page counts, completion status and an archive checksum.
+- New status files record requested pages, per-page counts, completion status, description coverage and an archive checksum.
 - The loader validates all six expected archives before loading any segment.
 - Old archives without status files are accepted with a warning: page completion is unverified.
 - Database constraints and `ON CONFLICT DO NOTHING` prevent repeated postings and observations from being inserted again.
@@ -99,11 +99,23 @@ The raw catalog stores one row per `source + job_id`. Observations record when t
 
 Analytical groups use source, country, normalized company, normalized title and a description hash. Location is excluded. Matching text may represent repeated adverts, reposts or separate vacancies with similar descriptions. **Groups are not verified unique vacancies.** The difference between source and group counts is not a confirmed duplicate count or a measure of total market inflation.
 
+### Data cleaning and quality flags
+
+Raw API values remain unchanged. Cleaning is applied in dbt so the source payload can always be audited:
+
+- Missing company names are displayed as `Unknown` and accompanied by `company_name_was_missing`. Missing-company records receive job-specific grouping keys to prevent accidental merges.
+- Non-positive salary bounds are treated as missing in the cleaned fields while the original values remain available as `source_salary_min` and `source_salary_max`.
+- Currency is assigned only when usable salary data exists. A missing source currency is inferred as EUR for Germany and GBP for the UK, with `salary_currency_was_inferred` preserving that lineage.
+- Posting age and a 90-day stale flag are quality signals, not evidence that a vacancy has closed. Training, internship and placement-style titles are flagged rather than deleted.
+- Description length, source-snippet status and likely truncation are exposed explicitly for quality monitoring.
+
 ### Skill mentions
 
 The dictionary includes Databricks, Microsoft Fabric, Power BI, DAX, Power Query, dbt, Spark, A/B testing and other skills. Pipe-separated aliases handle phrases such as `power bi|powerbi` and `spark|pyspark`. Multiple aliases count only once for each posting and skill.
 
-Matching uses normalized description snippets, limited to 500 characters in the current archive. It can miss requirements and produce ambiguous matches. A zero means no matched mention, not no market demand. Updating the dictionary and rebuilding dbt rescores stored descriptions.
+Matching uses normalized job titles and source-description snippets. The public Adzuna Search API [provides only a description snippet](https://developer.adzuna.com/docs/search), so matching can miss requirements and produce ambiguous results. A zero means no matched mention, not no market demand. Updating the dictionary and rebuilding dbt rescores stored text.
+
+Future extraction status files record description coverage and the observed 500-character boundary. Full-text enrichment will require a licensed Adzuna dataset or another authorised source that provides complete descriptions; the pipeline does not scrape redirect targets.
 
 The dashboard counts a group once per skill and date across selected roles. A group can mention several skills, so percentages across skills need not sum to 100%.
 
@@ -166,7 +178,7 @@ Generate dbt documentation with `dbt docs generate --project-dir .\dbt_job_marke
 
 ## Limitations
 
-Adzuna is one source with a capped sample. Collection is manual and dates are uneven. Training and placement adverts have not been excluded. Salary comparisons are not presented because source coverage and currency information are incomplete.
+Adzuna is one source with a capped sample. Collection is manual and dates are uneven. Training and placement adverts are flagged but not excluded. Salary comparisons are not presented because salary coverage is incomplete, some amounts are predicted, and inferred currency does not resolve differences in period or salary semantics. Public API descriptions are snippets rather than guaranteed full advert text.
 
 ## Next steps
 

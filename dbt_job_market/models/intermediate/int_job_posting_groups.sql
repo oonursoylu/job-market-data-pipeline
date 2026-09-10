@@ -9,6 +9,7 @@ with job_postings as (
         search_role,
         job_title,
         company_name,
+        company_name_was_missing,
         location,
         description,
         posted_date,
@@ -27,11 +28,16 @@ normalized as (
         search_role,
         job_title,
         company_name,
+        company_name_was_missing,
         location,
         posted_date,
         extract_date,
 
         trim(regexp_replace(lower(coalesce(company_name, '')), '[^a-z0-9]+', ' ', 'g')) as normalized_company_name,
+        case
+            when company_name_was_missing then 'missing-company:' || job_id
+            else trim(regexp_replace(lower(company_name), '[^a-z0-9]+', ' ', 'g'))
+        end as company_group_key,
         trim(regexp_replace(lower(coalesce(job_title, '')), '[^a-z0-9]+', ' ', 'g')) as normalized_job_title,
 
         md5(
@@ -48,7 +54,7 @@ grouped as (
         md5(
             source || '|' ||
             search_country || '|' ||
-            normalized_company_name || '|' ||
+            company_group_key || '|' ||
             normalized_job_title || '|' ||
             description_hash
         ) as posting_group_id,
@@ -58,6 +64,7 @@ grouped as (
         search_role,
         job_title,
         company_name,
+        company_name_was_missing,
         location,
         normalized_company_name,
         normalized_job_title,

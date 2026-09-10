@@ -73,13 +73,33 @@ def main(argv=None) -> None:
         for line_number, record in enumerate(records, start=1):
             if not isinstance(record, dict) or not record.get("id"):
                 raise ValueError(f"Invalid record {line_number} in {path}: expected an object with an id.")
+            if record.get("description") is not None and not isinstance(record["description"], str):
+                raise ValueError(f"Invalid record {line_number} in {path}: description must be text or null.")
         status_path = path.with_name("extraction_status.json")
         if status_path.exists():
             status = json.loads(status_path.read_text(encoding="utf-8"))
+            status_version = status.get("version")
             pages = status.get("pages", [])
             requested = status.get("requested_pages")
+            description_boundary = status.get("description_truncation_boundary")
+            has_valid_description_boundary = (
+                isinstance(description_boundary, int) and description_boundary > 0
+            )
+            profile_boundary = description_boundary if has_valid_description_boundary else 500
+            description_lengths = [
+                len(record["description"])
+                for record in records
+                if isinstance(record.get("description"), str)
+            ]
+            expected_description_profile = {
+                "records_with_description": len(description_lengths),
+                "records_at_or_above_boundary": sum(
+                    length >= profile_boundary for length in description_lengths
+                ),
+                "maximum_characters": max(description_lengths, default=0),
+            }
             valid = (
-                status.get("version") == 1
+                status_version in (1, 2)
                 and status.get("status") == "complete"
                 and status.get("country") == country
                 and status.get("search_role") == role
@@ -92,6 +112,14 @@ def main(argv=None) -> None:
                 and sum(item["records"] for item in pages) == len(records)
                 and status.get("total_records") == len(records)
                 and status.get("sha256") == hashlib.sha256(path.read_bytes()).hexdigest()
+                and (
+                    status_version == 1
+                    or (
+                        status.get("description_contract") == "snippet"
+                        and has_valid_description_boundary
+                        and status.get("description_profile") == expected_description_profile
+                    )
+                )
             )
             if not valid:
                 raise ValueError(f"Incomplete or inconsistent extraction status: {status_path}")

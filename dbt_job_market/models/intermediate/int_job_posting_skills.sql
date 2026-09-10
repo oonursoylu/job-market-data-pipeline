@@ -9,10 +9,15 @@ with job_postings as (
         search_role,
         posted_date,
         extract_date,
-        ' ' || regexp_replace(lower(coalesce(description, '')), '[^a-z0-9]+', ' ', 'g') || ' ' as normalized_description
+        ' ' || regexp_replace(
+            lower(concat_ws(' ', job_title, description)),
+            '[^a-z0-9]+',
+            ' ',
+            'g'
+        ) || ' ' as normalized_search_text
 
     from {{ ref('stg_job_postings') }}
-    where description is not null
+    where job_title is not null or description is not null
 
 ),
 
@@ -45,7 +50,7 @@ matched_skills as (
         on exists (
             select 1
             from unnest(string_to_array(skills.pattern, '|')) as aliases(alias)
-            where job_postings.normalized_description like '% ' || trim(aliases.alias) || ' %'
+            where job_postings.normalized_search_text like '% ' || trim(aliases.alias) || ' %'
         )
 
 )

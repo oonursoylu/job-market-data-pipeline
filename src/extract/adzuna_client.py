@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 
 
 BASE_URL = "https://api.adzuna.com/v1/api/jobs"
+DESCRIPTION_CONTRACT = "snippet"
+DESCRIPTION_TRUNCATION_BOUNDARY = 500
 
 SEARCH_ROLES = {
     "data_engineer": "data engineer",

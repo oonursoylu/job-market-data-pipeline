@@ -4,7 +4,12 @@ import json
 import os
 from datetime import date, datetime, timezone
 
-from adzuna_client import SEARCH_ROLES, fetch_jobs
+from adzuna_client import (
+    DESCRIPTION_CONTRACT,
+    DESCRIPTION_TRUNCATION_BOUNDARY,
+    SEARCH_ROLES,
+    fetch_jobs,
+)
 from archive_writer import build_archive_path, write_jobs_to_jsonl
 
 
@@ -18,9 +23,11 @@ def run_extract(country: str, search_role: str, max_pages: int = 2, results_per_
         raise FileExistsError(f"Existing archive or extraction status; review before retrying: {archive_path.parent}")
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     status = {
-        "version": 1, "status": "in_progress", "country": country,
+        "version": 2, "status": "in_progress", "country": country,
         "search_role": search_role, "extract_date": extract_date.isoformat(),
         "requested_pages": max_pages, "results_per_page": results_per_page,
+        "description_contract": DESCRIPTION_CONTRACT,
+        "description_truncation_boundary": DESCRIPTION_TRUNCATION_BOUNDARY,
         "pages": [], "started_at": datetime.now(timezone.utc).isoformat(),
     }
     # Claim this segment before sending requests; never overwrite another run.
@@ -51,7 +58,20 @@ def run_extract(country: str, search_role: str, max_pages: int = 2, results_per_
             print(f"Page {page}: fetched {len(jobs)} jobs")
 
         write_jobs_to_jsonl(all_jobs, country, search_role, extract_date)
+        description_lengths = [
+            len(job["description"])
+            for job in all_jobs
+            if isinstance(job.get("description"), str)
+        ]
         status.update(status="complete", total_records=len(all_jobs),
+                      description_profile={
+                          "records_with_description": len(description_lengths),
+                          "records_at_or_above_boundary": sum(
+                              length >= DESCRIPTION_TRUNCATION_BOUNDARY
+                              for length in description_lengths
+                          ),
+                          "maximum_characters": max(description_lengths, default=0),
+                      },
                       sha256=hashlib.sha256(archive_path.read_bytes()).hexdigest(),
                       finished_at=datetime.now(timezone.utc).isoformat())
         save_status()

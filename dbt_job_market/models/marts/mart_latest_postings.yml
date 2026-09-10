@@ -36,7 +36,14 @@ models:
           - not_null
 
       - name: company_name
-        description: "Company name from the posting."
+        description: "Company name from the posting, displayed as Unknown when the source value is missing."
+        tests:
+          - not_null
+
+      - name: company_name_was_missing
+        description: "True when the source did not provide a usable company name."
+        tests:
+          - not_null
 
       - name: location
         description: "Display location from the posting."
@@ -73,6 +80,62 @@ models:
 
       - name: posted_date
         description: "Date when the job posting was created at the source, when available."
+
+      - name: posting_age_days
+        description: "Non-negative age of the source posting at its latest observation date."
+
+      - name: is_stale_at_latest_observation
+        description: "True when the source posting date was more than 90 days before its latest observation."
+        tests:
+          - not_null
+
+      - name: is_training_or_placement
+        description: "Conservative title-based flag for trainee, apprenticeship, internship, placement programme, career-switch or no-experience adverts."
+        tests:
+          - not_null
+
+      - name: description_length
+        description: "Number of characters in the source description snippet."
+
+      - name: description_is_source_snippet
+        description: "True when the source does not guarantee full advert text."
+        tests:
+          - not_null
+
+      - name: description_is_likely_truncated
+        description: "True when the source description reaches the observed 500-character snippet boundary."
+        tests:
+          - not_null
+
+      - name: salary_min
+        description: "Cleaned positive minimum salary, when available."
+
+      - name: salary_max
+        description: "Cleaned positive maximum salary, when available."
+
+      - name: salary_is_available
+        description: "True when at least one positive salary bound is available."
+        tests:
+          - not_null
+
+      - name: salary_range_is_complete
+        description: "True when both positive salary bounds are available."
+        tests:
+          - not_null
+
+      - name: currency
+        description: "ISO currency code for usable salary data; inferred as EUR for Germany or GBP for the UK when absent at source."
+
+      - name: salary_currency_was_inferred
+        description: "True when the salary currency was inferred from the search country."
+        tests:
+          - not_null
+
+      - name: salary_is_predicted
+        description: "Source indicator showing whether Adzuna predicted the salary, when supplied."
+
+      - name: contract_type
+        description: "Contract type supplied by the source, when available."
 
       - name: first_observed_date
         description: "First extraction date when this job posting was observed."

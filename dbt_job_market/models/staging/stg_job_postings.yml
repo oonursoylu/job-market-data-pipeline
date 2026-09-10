@@ -19,10 +19,83 @@ models:
         description: Job title from the posting.
 
       - name: company_name
-        description: Company name from the posting.
+        description: Company name from the posting, displayed as Unknown when the source value is missing.
+        tests:
+          - not_null
+
+      - name: company_name_was_missing
+        description: True when the source did not provide a usable company name.
+        tests:
+          - not_null
+
+      - name: source_company_name
+        description: Trimmed company name supplied by the source, retained as null when missing.
 
       - name: location
         description: Display location from the posting.
+
+      - name: is_training_or_placement
+        description: Conservative title-based flag for trainee, apprenticeship, internship, placement programme, career-switch or no-experience adverts.
+        tests:
+          - not_null
+
+      - name: description
+        description: Trimmed description text returned by the source; Adzuna supplies a snippet rather than guaranteed full advert text.
+
+      - name: description_length
+        description: Number of characters in the description returned by the source API.
+
+      - name: description_is_source_snippet
+        description: True when the source contract provides a description snippet rather than guaranteed full advert text.
+        tests:
+          - not_null
+
+      - name: description_is_likely_truncated
+        description: True when the Adzuna description reaches the observed 500-character snippet boundary.
+        tests:
+          - not_null
+
+      - name: source_salary_min
+        description: Unmodified minimum salary supplied by the source.
+
+      - name: source_salary_max
+        description: Unmodified maximum salary supplied by the source.
+
+      - name: salary_min
+        description: Cleaned minimum salary; non-positive source placeholders are represented as null.
+
+      - name: salary_max
+        description: Cleaned maximum salary; non-positive source placeholders are represented as null.
+
+      - name: salary_is_available
+        description: True when at least one positive salary bound is available.
+        tests:
+          - not_null
+
+      - name: salary_range_is_complete
+        description: True when both positive salary bounds are available.
+        tests:
+          - not_null
+
+      - name: currency
+        description: ISO currency code for postings with usable salary data, supplied by the source or inferred from the search country.
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - EUR
+                  - GBP
+
+      - name: source_currency
+        description: Currency value supplied directly by the source, when available.
+
+      - name: salary_currency_was_inferred
+        description: True when currency was inferred as EUR for Germany or GBP for the United Kingdom.
+        tests:
+          - not_null
+
+      - name: salary_is_predicted
+        description: Source indicator showing whether Adzuna predicted the salary, when supplied.
 
       - name: search_country
         description: Country code used in the search request.

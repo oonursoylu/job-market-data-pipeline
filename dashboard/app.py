@@ -52,7 +52,14 @@ def load_data():
         observations = read_frame(connection, """
             select o.source, o.job_id, o.search_country, o.search_role, o.extract_date,
                    g.posting_group_id, p.job_title, p.company_name, p.location,
-                   p.posted_date, p.redirect_url
+                   p.company_name_was_missing, p.description_is_likely_truncated,
+                   p.is_training_or_placement,
+                   p.salary_is_available, p.salary_currency_was_inferred, p.currency,
+                   p.posted_date,
+                   case when p.posted_date is not null
+                        then greatest(o.extract_date - p.posted_date, 0) end as posting_age_days,
+                   coalesce(o.extract_date - p.posted_date > 90, false) as is_stale,
+                   p.redirect_url
             from analytics.stg_job_posting_observations o
             join analytics.stg_job_postings p using (source, job_id)
             join analytics.int_job_posting_groups g using (source, job_id)
@@ -137,7 +144,7 @@ st.caption(f"Snapshot: {snapshot_date} | {len(countries)} countries · {len(role
 with st.expander("How to read this dashboard"):
     st.write("One API source, with up to 150 results per country and search role in each collection. Counts describe this sample, not total market demand. Search roles can overlap.")
     st.write("Analytical groups match normalised company, title and description within each country and source. They are not verified vacancies. Reposts and similar separate jobs may share a group.")
-    st.write("Skills are matched in short description snippets, at most 500 characters in the current archive. A missing mention is not evidence that a skill is unnecessary. Historical snippets are rescored when the dictionary changes.")
+    st.write("Skills are matched in job titles and short source-description snippets. Adzuna does not guarantee full advert text, so a missing mention is not evidence that a skill is unnecessary. Historical text is rescored when the dictionary changes.")
 
 overview_tab, skills_tab, explore_tab, quality_tab = st.tabs(["Overview", "Skills", "Explore Postings", "Data Quality"])
 with overview_tab:
@@ -190,7 +197,7 @@ with overview_tab:
     if snapshot_summary.empty:
         st.info("Skill comparison is unavailable: some selected country/role segments have no observations on this date.")
     else:
-        st.caption("Share of analytical groups with a skill mention on this date. Each group counts once across selected roles. A group can mention several skills.")
+        st.caption("Share of analytical groups with a skill mention in the title or source snippet on this date. Each group counts once across selected roles. A group can mention several skills.")
         snapshot_top = snapshot_summary[snapshot_summary["Group-days with mention"] > 0].head(10)
         if snapshot_top.empty:
             st.info("No tracked skill mentions found in this snapshot.")
@@ -258,7 +265,7 @@ with skills_tab:
             watched = st.multiselect("Choose skills", dictionary.skill.tolist(),
                 default=[s for s in ["databricks", "microsoft fabric", "power bi", "dbt", "spark", "a/b testing"] if s in dictionary.skill.values],
                 format_func=skill_label)
-            st.caption("This is a personal watchlist, not a market ranking. Zero means no matched mention in the available snippets.")
+            st.caption("This is a personal watchlist, not a market ranking. Zero means no matched mention in the available title and snippet text.")
             st.dataframe(summary[summary.skill.isin(watched)][columns].round(2), hide_index=True, width="stretch")
         choice = st.selectbox("Skill trend", summary.skill.tolist(), format_func=skill_label)
         trend = pd.DataFrame({"Date": denominator.index, "Groups with mention": daily[choice].values,
@@ -319,6 +326,33 @@ with explore_tab:
         st.caption("Posted dates come from the source. A working source link is not confirmation that the vacancy remains active.")
 
 with quality_tab:
+    st.subheader("Selected snapshot quality signals")
+    quality_posts = snapshot.sort_values(["source", "job_id", "search_role"]).drop_duplicates(["source", "job_id"])
+    quality_count = len(quality_posts)
+    missing_companies = int(quality_posts.company_name_was_missing.fillna(False).sum())
+    likely_truncated = int(quality_posts.description_is_likely_truncated.fillna(False).sum())
+    salaries_available = int(quality_posts.salary_is_available.fillna(False).sum())
+    stale_postings = int(quality_posts.is_stale.fillna(False).sum())
+    training_postings = int(quality_posts.is_training_or_placement.fillna(False).sum())
+    q1, q2, q3, q4 = st.columns(4)
+    q1.metric("Unknown companies", f"{missing_companies:,}", help="The source company name was missing; raw data remains unchanged.")
+    q2.metric("Likely truncated snippets", f"{likely_truncated:,}", help="Descriptions at the observed 500-character API boundary.")
+    q3.metric("Postings with salary", f"{salaries_available:,}", help="At least one positive salary bound is available.")
+    q4.metric("Older than 90 days", f"{stale_postings:,}", help="Age is measured at the selected observation date; it does not prove closure.")
+    st.caption(
+        f"{training_postings:,} source postings are conservatively flagged from their titles as training, "
+        "internship or placement-style adverts. They remain in the sample."
+    )
+    salary_share = salaries_available / quality_count if quality_count else 0
+    inferred_currency = int(
+        quality_posts.loc[quality_posts.salary_is_available, "salary_currency_was_inferred"]
+        .fillna(False)
+        .sum()
+    )
+    st.caption(
+        f"Salary coverage is {salary_share:.1%}. For {inferred_currency:,} postings with usable salary data, "
+        "currency is inferred from the search country (EUR for Germany, GBP for the UK) and kept separate from source-provided currency."
+    )
     st.subheader("Repeated posting groups")
     repeated = snapshot.drop_duplicates(["source", "job_id"]).groupby("posting_group_id").agg(
         Company=("company_name", "first"), Title=("job_title", "first"),

@@ -48,6 +48,11 @@ models:
       - name: normalized_company_name
         description: "Lowercased and cleaned company name used for analytical grouping."
 
+      - name: company_name_was_missing
+        description: "True when the source company was missing. Such records receive a job-specific grouping key to avoid false merges."
+        tests:
+          - not_null
+
       - name: normalized_job_title
         description: "Lowercased and cleaned job title used for analytical grouping."
 
