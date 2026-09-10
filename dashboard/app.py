@@ -21,6 +21,11 @@ LABELS = {
     "a/b testing": "A/B Testing", "ci/cd": "CI/CD", "etl/elt": "ETL / ELT",
     "llm": "LLM", "numpy": "NumPy", "scikit-learn": "scikit-learn",
 }
+PLOTLY_CONFIG = {
+    "displayModeBar": False,
+    "displaylogo": False,
+    "responsive": True,
+}
 
 
 def skill_label(value):
@@ -108,7 +113,7 @@ with st.sidebar:
     roles = st.multiselect("Search roles", list(ROLES), default=list(ROLES), format_func=ROLES.get)
     if st.button("Refresh data"):
         load_data.clear()
-    st.caption("Data Analyst is being archived separately and is not included yet.")
+    st.caption("Data Analyst archives are being collected separately; reporting integration is pending.")
 if not countries or not roles:
     st.info("Select at least one country and search role.")
     st.stop()
@@ -136,34 +141,6 @@ with st.expander("How to read this dashboard"):
 
 overview_tab, skills_tab, explore_tab, quality_tab = st.tabs(["Overview", "Skills", "Explore Postings", "Data Quality"])
 with overview_tab:
-    st.subheader("Skills in the selected snapshot")
-    snapshot_summary, _, snapshot_denominator = skill_metrics(
-        observations, skills, dictionary, countries, roles, snapshot_date, snapshot_date
-    )
-    if snapshot_summary.empty:
-        st.info("Skill comparison is unavailable: some selected country/role segments have no observations on this date.")
-    else:
-        st.caption("Share of analytical groups with a skill mention on this date. Each group counts once across selected roles. A group can mention several skills.")
-        ranking_column, watch_column = st.columns([3, 2])
-        with ranking_column:
-            st.write("**Most mentioned skills**")
-            snapshot_top = snapshot_summary[snapshot_summary["Group-days with mention"] > 0].head(10)
-            if snapshot_top.empty:
-                st.info("No tracked skill mentions found in this snapshot.")
-            else:
-                snapshot_top = snapshot_top.rename(columns={"Share of observed group-days (%)": "Share of groups (%)"})
-                st.plotly_chart(px.bar(snapshot_top.sort_values("Share of groups (%)"),
-                    x="Share of groups (%)", y="Skill", orientation="h",
-                    color_discrete_sequence=["#2563eb"]), width="stretch", key="snapshot_top_skills")
-        with watch_column:
-            st.write("**Skills to watch**")
-            focus = ["databricks", "microsoft fabric", "power bi", "dbt", "spark", "a/b testing"]
-            watch = snapshot_summary[snapshot_summary.skill.isin(focus)].copy()
-            watch = watch.set_index("skill").reindex([s for s in focus if s in watch.skill.values])
-            watch = watch.rename(columns={"Group-days with mention": "Groups", "Share of observed group-days (%)": "Share (%)"})
-            st.dataframe(watch[["Skill", "Groups", "Share (%)"]].round(2), hide_index=True, width="stretch")
-            st.caption("A personal watchlist. Zero means no matched mention in the available snippets.")
-            st.write("Open **Skills** for all 53 tracked skills, a custom watchlist and trends.")
     st.subheader("Selected snapshot")
     source_count = len(snapshot.drop_duplicates(["source", "job_id"]))
     groups = group_count(snapshot)
@@ -176,16 +153,72 @@ with overview_tab:
     by_role = snapshot.groupby(["search_country", "search_role"]).agg(
         source_postings=("job_id", "nunique"), analytical_groups=("posting_group_id", "nunique")
     ).reset_index()
+    country_order = {country: index for index, country in enumerate(COUNTRIES)}
+    role_order = {role: index for index, role in enumerate(ROLES)}
+    by_role["country_order"] = by_role.search_country.map(country_order)
+    by_role["role_order"] = by_role.search_role.map(role_order)
+    by_role = by_role.sort_values(["country_order", "role_order"], kind="stable")
     by_role["Segment"] = by_role.search_country.map(COUNTRIES) + " / " + by_role.search_role.map(ROLES)
     by_role["Reduction (%)"] = (1 - by_role.analytical_groups / by_role.source_postings) * 100
     chart = by_role.rename(columns={"source_postings": "Source postings", "analytical_groups": "Analytical groups"})
     melted = chart.melt(id_vars="Segment", value_vars=["Source postings", "Analytical groups"], var_name="Measure", value_name="Count")
-    st.plotly_chart(px.bar(melted, x="Segment", y="Count", color="Measure", barmode="group",
-        color_discrete_map={"Source postings": "#94a3b8", "Analytical groups": "#2563eb"}), width="stretch")
+    segment_order = chart.Segment.tolist()
+    role_figure = px.bar(
+        melted,
+        x="Segment",
+        y="Count",
+        color="Measure",
+        barmode="group",
+        category_orders={
+            "Segment": segment_order,
+            "Measure": ["Source postings", "Analytical groups"],
+        },
+        color_discrete_map={"Source postings": "#94a3b8", "Analytical groups": "#2563eb"},
+    )
+    role_figure.update_layout(legend_title_text=None, margin=dict(l=10, r=10, t=20, b=10))
+    role_figure.update_yaxes(rangemode="tozero")
+    st.plotly_chart(role_figure, width="stretch", config=PLOTLY_CONFIG)
     st.caption("Segment counts may overlap. The cards count source IDs and groups once across the selected snapshot.")
-    st.dataframe(chart[["Segment", "Source postings", "Analytical groups", "Reduction (%)"]].round(1), hide_index=True, width="stretch")
+    with st.expander("View segment details"):
+        st.dataframe(chart[["Segment", "Source postings", "Analytical groups", "Reduction (%)"]].round(1), hide_index=True, width="stretch")
     with st.expander("Accumulated archive for this scope"):
         st.write(f"{len(scoped.drop_duplicates(['source', 'job_id'])):,} distinct source postings across {scoped.extract_date.nunique()} observed dates. These are not all currently open jobs.")
+    st.subheader("Most mentioned skills in the selected snapshot")
+    snapshot_summary, _, snapshot_denominator = skill_metrics(
+        observations, skills, dictionary, countries, roles, snapshot_date, snapshot_date
+    )
+    if snapshot_summary.empty:
+        st.info("Skill comparison is unavailable: some selected country/role segments have no observations on this date.")
+    else:
+        st.caption("Share of analytical groups with a skill mention on this date. Each group counts once across selected roles. A group can mention several skills.")
+        snapshot_top = snapshot_summary[snapshot_summary["Group-days with mention"] > 0].head(10)
+        if snapshot_top.empty:
+            st.info("No tracked skill mentions found in this snapshot.")
+        else:
+            snapshot_top = snapshot_top.rename(columns={"Share of observed group-days (%)": "Share of groups (%)"})
+            snapshot_skill_figure = px.bar(
+                snapshot_top.sort_values("Share of groups (%)"),
+                x="Share of groups (%)",
+                y="Skill",
+                orientation="h",
+                text="Share of groups (%)",
+                color_discrete_sequence=["#2563eb"],
+            )
+            snapshot_skill_figure.update_traces(
+                texttemplate="%{text:.1f}%",
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="<b>%{y}</b><br>Share of groups: %{x:.1f}%<extra></extra>",
+            )
+            snapshot_skill_figure.update_layout(margin=dict(l=10, r=45, t=20, b=10))
+            snapshot_skill_figure.update_xaxes(rangemode="tozero", ticksuffix="%")
+            st.plotly_chart(
+                snapshot_skill_figure,
+                width="stretch",
+                config=PLOTLY_CONFIG,
+                key="snapshot_top_skills",
+            )
+        st.caption("Open the Skills tab for a custom watchlist, the complete ranking and observed trends.")
 
 with skills_tab:
     st.subheader("Which skills appear in the sample?")
@@ -203,22 +236,56 @@ with skills_tab:
         if top.empty:
             st.info("No tracked skill mentions were found in this scope.")
         else:
-            st.plotly_chart(px.bar(top.sort_values("Share of observed group-days (%)"),
-                x="Share of observed group-days (%)", y="Skill", orientation="h",
-                color_discrete_sequence=["#2563eb"]), width="stretch")
-        st.write("**Skills to watch**")
-        watched = st.multiselect("Choose skills", dictionary.skill.tolist(),
-            default=[s for s in ["databricks", "microsoft fabric", "power bi", "dbt", "spark", "a/b testing"] if s in dictionary.skill.values],
-            format_func=skill_label)
-        st.caption("This is a personal watchlist, not a market ranking. Zero means no matched mention in the available snippets.")
+            top_skill_figure = px.bar(
+                top.sort_values("Share of observed group-days (%)"),
+                x="Share of observed group-days (%)",
+                y="Skill",
+                orientation="h",
+                text="Share of observed group-days (%)",
+                color_discrete_sequence=["#2563eb"],
+            )
+            top_skill_figure.update_traces(
+                texttemplate="%{text:.1f}%",
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="<b>%{y}</b><br>Share of group-days: %{x:.1f}%<extra></extra>",
+            )
+            top_skill_figure.update_layout(margin=dict(l=10, r=45, t=20, b=10))
+            top_skill_figure.update_xaxes(rangemode="tozero", ticksuffix="%")
+            st.plotly_chart(top_skill_figure, width="stretch", config=PLOTLY_CONFIG)
         columns = ["Skill", "Group-days with mention", "Share of observed group-days (%)", "Average groups per observed day"]
-        st.dataframe(summary[summary.skill.isin(watched)][columns].round(2), hide_index=True, width="stretch")
+        with st.expander("Build a personal skill watchlist"):
+            watched = st.multiselect("Choose skills", dictionary.skill.tolist(),
+                default=[s for s in ["databricks", "microsoft fabric", "power bi", "dbt", "spark", "a/b testing"] if s in dictionary.skill.values],
+                format_func=skill_label)
+            st.caption("This is a personal watchlist, not a market ranking. Zero means no matched mention in the available snippets.")
+            st.dataframe(summary[summary.skill.isin(watched)][columns].round(2), hide_index=True, width="stretch")
         choice = st.selectbox("Skill trend", summary.skill.tolist(), format_func=skill_label)
         trend = pd.DataFrame({"Date": denominator.index, "Groups with mention": daily[choice].values,
                               "Observed groups": denominator.values})
         trend["Share (%)"] = trend["Groups with mention"] / trend["Observed groups"] * 100
-        st.plotly_chart(px.scatter(trend, x="Date", y="Share (%)", hover_data=["Groups with mention", "Observed groups"],
-            title=f"{skill_label(choice)} in observed groups", color_discrete_sequence=["#2563eb"]), width="stretch")
+        trend_figure = px.line(
+            trend,
+            x="Date",
+            y="Share (%)",
+            markers=True,
+            custom_data=["Groups with mention", "Observed groups"],
+            title=f"{skill_label(choice)} in observed groups",
+            color_discrete_sequence=["#2563eb"],
+        )
+        trend_figure.update_traces(
+            line_width=2,
+            marker_size=8,
+            connectgaps=False,
+            hovertemplate=(
+                "<b>%{x}</b><br>Share: %{y:.1f}%"
+                "<br>Groups with mention: %{customdata[0]}"
+                "<br>Observed groups: %{customdata[1]}<extra></extra>"
+            ),
+        )
+        trend_figure.update_layout(margin=dict(l=10, r=10, t=55, b=10))
+        trend_figure.update_yaxes(rangemode="tozero", ticksuffix="%")
+        st.plotly_chart(trend_figure, width="stretch", config=PLOTLY_CONFIG)
         st.caption("Each point is an observed date. Missing dates are not plotted as zero. A skill can be zero on an observed date.")
         with st.expander("All tracked skills"):
             st.dataframe(summary[columns].round(2), hide_index=True, width="stretch")
@@ -227,19 +294,29 @@ with explore_tab:
     st.subheader("Inspect the selected snapshot")
     search = st.text_input("Search postings", placeholder="Job title, company or location")
     posts = snapshot.sort_values(["source", "job_id", "search_role"]).drop_duplicates(["source", "job_id"])
+    posts = posts.sort_values(
+        ["posted_date", "job_title", "company_name"],
+        ascending=[False, True, True],
+        na_position="last",
+        kind="stable",
+    )
     if search.strip():
         mask = pd.Series(False, index=posts.index)
         for column in ["job_title", "company_name", "location"]:
             mask |= posts[column].str.contains(search.strip(), case=False, na=False, regex=False)
         posts = posts[mask]
-    st.caption(f"Showing {min(100, len(posts))} of {len(posts):,} matching postings. An observed advert may no longer be open.")
+    st.caption(
+        f"Showing {min(100, len(posts))} of {len(posts):,} matching postings, newest source date first. "
+        "These adverts were observed in the selected snapshot, but the dashboard does not verify whether a vacancy is still open."
+    )
     if posts.empty:
         st.info("No postings match this search.")
     else:
         table = posts[["job_title", "company_name", "location", "posted_date", "redirect_url"]].rename(columns={
-            "job_title": "Job title", "company_name": "Company", "location": "Location", "posted_date": "Posted date", "redirect_url": "URL"})
+            "job_title": "Job title", "company_name": "Company", "location": "Location", "posted_date": "Posted date", "redirect_url": "Source page"})
         st.dataframe(table.head(100), hide_index=True, width="stretch",
-            column_config={"URL": st.column_config.LinkColumn("Advert", display_text="Open")})
+            column_config={"Source page": st.column_config.LinkColumn("Source page", display_text="View source")})
+        st.caption("Posted dates come from the source. A working source link is not confirmation that the vacancy remains active.")
 
 with quality_tab:
     st.subheader("Repeated posting groups")
