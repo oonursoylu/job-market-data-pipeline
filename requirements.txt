@@ -1,8 +1,10 @@
-requests
-python-dotenv
-psycopg2-binary
+requests==2.34.2
+python-dotenv==1.2.2
+psycopg2-binary==2.9.12
 dbt-core==1.10.22
 dbt-postgres==1.10.0
-streamlit
-pandas
-plotly
+streamlit==1.59.1
+pandas==3.0.3
+plotly==6.9.0
+numpy==2.5.1
+pyarrow==25.0.0

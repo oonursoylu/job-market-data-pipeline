@@ -10,8 +10,8 @@ I built it to see which skills appear in these adverts and how repeated postings
 
 - A batch pipeline that archives the raw API responses and records every date an advert appears in a search.
 - Archive validation and repeatable loading, so rerunning a load never inserts the same record twice.
-- Fourteen dbt models, one seed and 177 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency.
-- A star schema for reporting: one fact table of observations, dimension tables for postings, segments and skills, and a bridge table that links posting groups to skills.
+- Eleven dbt models, one seed and 129 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency.
+- A star schema for reporting: one fact table of observations, dimension tables for postings, posting groups, segments and skills, and a bridge table that links posting groups to skills.
 - A dashboard for comparing skill mentions, browsing adverts and inspecting repeated posting groups. It reads only the star schema, calculates its figures in SQL and has a check against the earlier pandas version.
 - SQL performance work, with every faster version checked against the original output (details below).
 
@@ -20,6 +20,8 @@ The reporting covers Data Engineer, Analytics Engineer and AI Engineer searches 
 ## Dashboard
 
 The Overview tab compares source postings with analytical groups for the selected date and shows the most mentioned skills. Country and role filters narrow the sample.
+
+![Overview tab of the dashboard](docs/screenshots/dashboard_overview.png)
 
 | View | What it shows |
 |---|---|
@@ -43,11 +45,10 @@ flowchart LR
     S[Skill dictionary] --> G
     G --> H[dbt star schema]
     S --> H
-    G --> M[dbt daily facts and marts]
     H --> I[Streamlit dashboard]
 ```
 
-The dashboard reads only the star schema. Its queries in [dashboard/queries.py](dashboard/queries.py) apply the counting rules in SQL, and the same rules are described on the fact table in dbt, so another tool can follow them. The daily facts and marts are reusable aggregate tables, but their averages follow a simpler rule (see the calculation details). Source freshness checks and dbt tests run separately from this flow.
+The dashboard reads only the star schema. Its queries in [dashboard/queries.py](dashboard/queries.py) apply the counting rules in SQL, and the same rules are described on the fact table in dbt, so another tool can follow them. A separate latest-postings mart keeps one row per advert with its latest search context. Source freshness checks and dbt tests run separately from this flow.
 
 ## Dashboard parity check
 
@@ -67,7 +68,7 @@ I looked for SQL that repeated work and checked that each faster version returne
 |---|---|
 | Latest-postings model uses `DISTINCT ON` instead of a `ROW_NUMBER()` filter | dbt model build: 62.35 s before, 0.71 s after. Read query: 59.42 s before, 0.25 s after. Both versions returned the same 5,002 rows, with no differences in either direction, and the 15 related tests passed. |
 | Skill matches stored as a dbt table instead of a view | Reading the view took 24.35 s; reading the stored table took 0.006 s. All 2,051 rows matched, including duplicates. |
-| Downstream models reuse the stored skill matches | Daily skill fact build: 24.73 s before, 0.21 s after. |
+| Downstream models reuse the stored skill matches | Daily skill fact build: 24.73 s before, 0.21 s after. The star schema later replaced that model, and its skill bridge reads the same stored matches. |
 
 For the latest-postings model, the query plan showed PostgreSQL estimating 1 row for a join that actually returned 5,002, so it chose nested loops that kept rescanning the same data.
 
@@ -133,7 +134,7 @@ For figures that span several days, the dashboard:
 - divides matching group-days by observed group-days for the percentage;
 - includes zero-mention dates in the daily average.
 
-Observed coverage does not prove that every requested API page completed, and the dashboard does not read the status files yet. The rules are applied in SQL in `dashboard/queries.py` and described on `fct_job_observations` in dbt. The aggregate marts use a simpler average, over the days on which a skill was mentioned, so reporting tools should use the star schema instead.
+Observed coverage does not prove that every requested API page completed, and the dashboard does not read the status files yet. The rules are applied in SQL in `dashboard/queries.py` and described on `fct_job_observations` in dbt, so a reporting tool can use the same definitions on the star schema.
 
 </details>
 
@@ -141,7 +142,7 @@ Observed coverage does not prove that every requested API page completed, and th
 
 The dashboard needs PostgreSQL and built dbt models. Its five-minute cache can be cleared with **Refresh data** after a successful build; the button does not run dbt.
 
-From the repository root in Windows PowerShell:
+The versions in `requirements.txt` are pinned to the ones tested with Python 3.12 on Windows. From the repository root in Windows PowerShell:
 
 ```powershell
 python -m venv .venv

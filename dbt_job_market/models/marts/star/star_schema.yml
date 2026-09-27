@@ -54,7 +54,38 @@ models:
           - not_null
           - unique
       - name: posting_group_id
-        description: "Analytical group of the posting. Groups are not verified unique vacancies."
+        description: "Analytical group of the posting; key to dim_posting_groups. Groups are not verified unique vacancies."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_posting_groups')
+                field: posting_group_id
+
+  - name: dim_posting_groups
+    description: >
+      One row per analytical posting group. Relates fct_job_observations and bridge_posting_group_skills
+      through a unique key, so BI tools do not need a many-to-many relationship. Groups are not verified unique vacancies.
+    columns:
+      - name: posting_group_id
+        description: "Analytical group key."
+        data_tests:
+          - not_null
+          - unique
+      - name: company_name
+        description: "Company shown for the group. Members share the normalised company name."
+        data_tests:
+          - not_null
+      - name: job_title
+        description: "Title shown for the group. Members share the normalised title."
+      - name: member_posting_count
+        description: "Source postings in the group across the whole catalogue, not in one snapshot."
+        data_tests:
+          - not_null
+      - name: location_count
+        description: "Distinct locations of the group's source postings across the whole catalogue."
+      - name: first_catalog_date
+        description: "Date the first member posting entered the raw catalogue."
         data_tests:
           - not_null
 
@@ -87,9 +118,13 @@ models:
                 to: ref('dim_segments')
                 field: segment_id
       - name: posting_group_id
-        description: "Analytical group of the observed posting; key to bridge_posting_group_skills."
+        description: "Analytical group of the observed posting; key to dim_posting_groups."
         data_tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_posting_groups')
+                field: posting_group_id
       - name: extract_date
         description: "Date the batch pipeline observed the posting."
         data_tests:
@@ -110,12 +145,12 @@ models:
           - not_null
           - unique
       - name: posting_group_id
-        description: "Analytical group with a skill mention."
+        description: "Analytical group with a skill mention; key to dim_posting_groups."
         data_tests:
           - not_null
           - relationships:
               arguments:
-                to: ref('dim_job_postings')
+                to: ref('dim_posting_groups')
                 field: posting_group_id
       - name: skill
         description: "Matched skill; key to dim_skills."
