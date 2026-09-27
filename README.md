@@ -10,7 +10,7 @@ I built it to see which skills appear in these adverts and how repeated postings
 
 - A batch pipeline that archives the raw API responses and records every date an advert appears in a search.
 - Archive validation and repeatable loading, so rerunning a load never inserts the same record twice.
-- Eleven dbt models, one seed and 129 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency.
+- Eleven dbt models, one seed and 133 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency.
 - A star schema for reporting: one fact table of observations, dimension tables for postings, posting groups, segments and skills, and a bridge table that links posting groups to skills.
 - A dashboard for comparing skill mentions, browsing adverts and inspecting repeated posting groups. It reads only the star schema, calculates its figures in SQL and has a check against the earlier pandas version.
 - SQL performance work, with every faster version checked against the original output (details below).

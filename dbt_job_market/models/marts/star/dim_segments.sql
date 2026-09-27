@@ -35,6 +35,9 @@ select
     roles.role_name,
     roles.role_sort_order,
     countries.country_name || ' / ' || roles.role_name as segment_name,
+    row_number() over (
+        order by countries.country_sort_order, roles.role_sort_order
+    ) as segment_sort_order,
     roles.is_reporting_segment
 
 from countries

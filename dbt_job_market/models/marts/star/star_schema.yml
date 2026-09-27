@@ -17,6 +17,16 @@ models:
         description: "Role keyword group used in the search request."
         data_tests:
           - not_null
+      - name: segment_name
+        description: "Display name, for example Germany / Data Engineer."
+        data_tests:
+          - not_null
+          - unique
+      - name: segment_sort_order
+        description: "Sort order for segment_name: countries first, then roles. Use it as the Sort by column in BI tools."
+        data_tests:
+          - not_null
+          - unique
       - name: is_reporting_segment
         description: "False for segments that are collected but not reported yet."
         data_tests:
