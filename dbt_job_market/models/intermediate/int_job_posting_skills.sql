@@ -1,6 +1,8 @@
 {{ config(materialized='table') }}
 
-with job_postings as (
+-- MATERIALIZED makes PostgreSQL normalise each posting's text once. Without it,
+-- the CTE is inlined and regexp_replace runs again for every posting and skill pair.
+with job_postings as materialized (
 
     select
         source,

@@ -1,33 +1,33 @@
 # Job Market Data Pipeline
 
-A Python and SQL project that collects job adverts from Germany and the UK, stores historical observations in PostgreSQL, and uses dbt to prepare data for a Streamlit dashboard.
+I collect data-job adverts from Germany and the UK through the Adzuna API, keep every raw response, load them into PostgreSQL and model them with dbt. A Streamlit dashboard sits on top.
 
-I built it to explore which skills appear in collected adverts and how repeated postings affect the results. The project also covers practical data engineering tasks, including safe archive handling, repeatable loading, data quality checks and query optimisation.
+I built it to see which skills appear in these adverts and how repeated postings distort the counts. It also covers the less glamorous side of data work: loads that are safe to rerun, adverts that show up several times, data quality checks and slow SQL.
 
 **Built with:** Python · PostgreSQL · dbt Core · Streamlit · Plotly
 
-## What I built
+## What's in it
 
-- A batch pipeline that keeps raw API responses and tracks when each advert appears in a search.
-- Archive validation and repeatable loading, so rerunning a load does not add the same records again.
-- dbt models with 145 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency.
-- A dashboard for comparing skill mentions, exploring adverts and inspecting repeated posting groups.
-- SQL performance improvements checked against the original results. One read query fell from 59.42 seconds to 0.25 seconds in local testing, with the same 5,002 rows.
+- A batch pipeline that archives the raw API responses and records every date an advert appears in a search.
+- Archive validation and repeatable loading, so rerunning a load never inserts the same record twice.
+- Nine dbt models, one seed and 145 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency.
+- A dashboard for comparing skill mentions, browsing adverts and inspecting repeated posting groups.
+- SQL performance work, with every faster version checked against the original output (details below).
 
-The reporting workflow covers Data Engineer, Analytics Engineer and AI Engineer searches in both countries. Data Analyst collection has started separately and is not yet included in the dashboard. Collection and model refreshes currently run manually.
+The reporting covers Data Engineer, Analytics Engineer and AI Engineer searches in both countries. I have started collecting Data Analyst adverts too, but they are not in the dashboard yet. Collection and dbt runs are still manual.
 
 ## Dashboard
 
-The dashboard starts with the most mentioned skills and a watchlist, followed by posting counts for the selected date. Country and role filters let users narrow the sample.
+The Overview tab compares source postings with analytical groups for the selected date and shows the most mentioned skills. Country and role filters narrow the sample.
 
 | View | What it shows |
 |---|---|
-| Overview | Top skills, a watchlist, and source postings compared with analytical groups |
-| Skills | Rankings, trends and all 53 tracked skills, including those with no matched mentions |
+| Overview | Source postings compared with analytical groups, counts by country and role, and the top skills for the selected date |
+| Skills | Rankings, a personal watchlist, trends and all 53 tracked skills, including those with no matched mentions |
 | Explore Postings | Search by job title, company or location |
-| Data Quality | Missing-company, snippet, salary and age signals, repeated posting groups, and observed collection coverage |
+| Data Quality | Missing companies, truncated snippets, salary coverage, posting age, repeated posting groups and observed collection coverage |
 
-The skill dictionary tracks technologies such as Databricks, Microsoft Fabric and Power BI alongside programming, data engineering and analytical skills. These are terms found in adverts, not tools used to build the pipeline.
+The skill dictionary includes tools such as Databricks, Microsoft Fabric and Power BI. They are terms found in adverts, not tools used to build this pipeline.
 
 ## Architecture
 
@@ -46,36 +46,38 @@ flowchart LR
     S --> I
 ```
 
-The dashboard reads dbt staging observations, stored posting groups, stored skill matches and the dictionary. Daily facts and reporting marts provide reusable reporting tables. Source freshness checks and dbt tests validate the data separately from this flow.
+The dashboard reads the dbt staging observations, the stored posting groups and skill matches, and the dictionary. The daily facts and reporting marts are reusable tables for other tools. Source freshness checks and dbt tests run separately from this flow.
 
-## Backup and restore verification
+## Backup and restore check
 
-I verified a PostgreSQL backup by restoring it to a separate test database on 2026-09-07. All 11 tables matched the source data, including duplicate rows. Table structures, constraints, indexes, views, ownership and sequence state also matched.
+On 7 September 2026 I restored a PostgreSQL backup into a separate test database and compared it with the source. All 11 tables matched, including duplicate rows, and so did the table structures, constraints, indexes, views, ownership and sequence state. The comparisons were read-only and left the source database untouched. The restore ran on the same PostgreSQL 18.4 server, and the backup archive is kept outside Git.
 
-The checks used read-only comparisons and left the source database unchanged. This was a restore test on the same PostgreSQL 18.4 server. The backup archive is kept outside Git.
+The procedure and results are in [docs/backup_restore_verification.md](docs/backup_restore_verification.md).
 
-See [the restore procedure and verification results](docs/backup_restore_verification.md).
+## Performance
 
-## Performance improvements
-
-I investigated repeated SQL work and checked that the faster versions preserved the results. These measurements were taken locally on 2026-09-06.
+I looked for SQL that repeated work and checked that each faster version returned exactly the same rows. These measurements were taken locally on 6 September 2026.
 
 | Change | Evidence |
 |---|---|
-| Latest-postings query uses `DISTINCT ON` | Read query: 59.421 seconds before, 0.245 seconds for the candidate. Both returned 5,002 rows with no differences in either direction. Selected dbt model build: 0.71 seconds. |
-| Store skill matches as a dbt table | View read: 24.348 seconds; temporary-table read: 0.006 seconds. All 2,051 rows matched, including duplicates. |
-| Reuse stored skill matches downstream | Daily skill fact build: 24.73 seconds before, 0.21 seconds after. |
+| Latest-postings model uses `DISTINCT ON` instead of a `ROW_NUMBER()` filter | dbt model build: 62.35 s before, 0.71 s after. Read query: 59.42 s before, 0.25 s after. Both versions returned the same 5,002 rows, with no differences in either direction, and the 15 related tests passed. |
+| Skill matches stored as a dbt table instead of a view | Reading the view took 24.35 s; reading the stored table took 0.006 s. All 2,051 rows matched, including duplicates. |
+| Downstream models reuse the stored skill matches | Daily skill fact build: 24.73 s before, 0.21 s after. |
 
-Building the skill table still took 24.55 seconds. The change removes repeated computation from reads and downstream models. Run dbt after loading new postings or updating the dictionary. The selected four-model build took 27.96 seconds; it is not directly comparable to a full build.
+For the latest-postings model, the query plan showed PostgreSQL estimating 1 row for a join that actually returned 5,002, so it chose nested loops that kept rescanning the same data.
+
+The skill table itself was still slow to build. PostgreSQL inlines a CTE that is used only once, so the text cleaning (lower-casing and `regexp_replace`) ended up inside the join and ran again for every posting and skill pair. The model now declares that CTE as `MATERIALIZED`, so each posting's text is cleaned once. On 27 September 2026 the skill table build fell from 28.58 s to 2.78 s, and the new table matched the old one row for row in both directions.
+
+Run dbt after loading new postings or changing the dictionary.
 
 <details>
 <summary>Data handling and calculation details</summary>
 
-## Collection and loading
+### Collection and loading
 
-Each default run requests three pages of up to 50 results for six country/role segments. This is up to 900 returned records, not necessarily 900 distinct adverts or new observations.
+Each default run requests three pages of up to 50 results for six country and role segments. That is up to 900 returned records, which is not the same as 900 distinct adverts or new observations.
 
-Archives use this structure:
+Archives use this layout:
 
 ```text
 data/raw/adzuna/country=XX/search_role=ROLE/date=YYYY-MM-DD/
@@ -83,56 +85,56 @@ data/raw/adzuna/country=XX/search_role=ROLE/date=YYYY-MM-DD/
   extraction_status.json
 ```
 
-- Existing archives or extraction status files block another extraction for that segment and date.
-- JSONL is written through a temporary file without replacing an existing archive.
-- New status files record requested pages, per-page counts, completion status, description coverage and an archive checksum.
-- The loader validates all six expected archives before loading any segment.
-- Old archives without status files are accepted with a warning: page completion is unverified.
-- Database constraints and `ON CONFLICT DO NOTHING` prevent repeated postings and observations from being inserted again.
-- Loading commits by segment; the complete batch is not one database transaction. A later database failure can leave earlier segments loaded. Safe reruns complete the remaining work.
-
-## Analytical rules
+- An existing archive or status file blocks another extraction for that segment and date.
+- JSONL is written to a temporary file first and never replaces an existing archive.
+- Status files record the requested pages, records per page, completion status, description coverage and an archive checksum.
+- The loader validates all six expected archives before it loads any segment.
+- Older archives without a status file are accepted with a warning, because their page completion cannot be verified.
+- Database constraints and `ON CONFLICT DO NOTHING` stop repeated postings and observations from being inserted again.
+- Loading commits one segment at a time rather than the whole batch in one transaction. If the database fails midway, earlier segments stay loaded, and a rerun completes the rest safely.
 
 ### Source postings and groups
 
-The raw catalog stores one row per `source + job_id`. Observations record when that posting appeared in a country/role search.
+The raw catalogue stores one row per `source + job_id`. Observations record each date a posting appeared in a country and role search.
 
-Analytical groups use source, country, normalized company, normalized title and a description hash. Location is excluded. Matching text may represent repeated adverts, reposts or separate vacancies with similar descriptions. **Groups are not verified unique vacancies.** The difference between source and group counts is not a confirmed duplicate count or a measure of total market inflation.
+Analytical groups combine source, country, normalised company, normalised title and a hash of the description. Location is left out on purpose, so the same advert posted in several cities falls into one group. Matching text can also mean reposts or separate vacancies with similar wording, so **groups are not verified unique vacancies**. The gap between source and group counts is not a confirmed duplicate count or a measure of market inflation.
 
 ### Data cleaning and quality flags
 
-Raw API values remain unchanged. Cleaning is applied in dbt so the source payload can always be audited:
+Raw API values stay unchanged. Cleaning happens in dbt, so the source payload can always be audited.
 
-- Missing company names are displayed as `Unknown` and accompanied by `company_name_was_missing`. Missing-company records receive job-specific grouping keys to prevent accidental merges.
-- Non-positive salary bounds are treated as missing in the cleaned fields while the original values remain available as `source_salary_min` and `source_salary_max`.
-- Currency is assigned only when usable salary data exists. A missing source currency is inferred as EUR for Germany and GBP for the UK, with `salary_currency_was_inferred` preserving that lineage.
+- Missing company names show as `Unknown`, with `company_name_was_missing` set. These records get job-specific grouping keys, so they are never merged by accident.
+- Non-positive salary bounds are treated as missing in the cleaned fields. The original values stay in `source_salary_min` and `source_salary_max`.
+- Currency is only assigned when there is usable salary data. A missing source currency is inferred as EUR for Germany and GBP for the UK, and `salary_currency_was_inferred` keeps that lineage.
 - Posting age and a 90-day stale flag are quality signals, not evidence that a vacancy has closed. Training, internship and placement-style titles are flagged rather than deleted.
-- Description length, source-snippet status and likely truncation are exposed explicitly for quality monitoring.
+- Description length, snippet status and likely truncation are exposed as columns for quality monitoring.
 
 ### Skill mentions
 
-The dictionary includes Databricks, Microsoft Fabric, Power BI, DAX, Power Query, dbt, Spark, A/B testing and other skills. Pipe-separated aliases handle phrases such as `power bi|powerbi` and `spark|pyspark`. Multiple aliases count only once for each posting and skill.
+The dictionary covers 53 skills, including Databricks, Microsoft Fabric, Power BI, DAX, Power Query, dbt, Spark and A/B testing. Pipe-separated aliases handle variants such as `power bi|powerbi` and `spark|pyspark`, and a posting counts once per skill however many aliases match.
 
-Matching uses normalized job titles and source-description snippets. The public Adzuna Search API [provides only a description snippet](https://developer.adzuna.com/docs/search), so matching can miss requirements and produce ambiguous results. A zero means no matched mention, not no market demand. Updating the dictionary and rebuilding dbt rescores stored text.
+Matching works on whole words. Titles and snippets are lower-cased, anything other than a-z and 0-9 becomes a space, and an alias has to appear between spaces, so `scala` does not match "scalable". It cannot read meaning, though: `excel` also matches the verb in "you will excel in this role".
 
-Future extraction status files record description coverage and the observed 500-character boundary. Full-text enrichment will require a licensed Adzuna dataset or another authorised source that provides complete descriptions; the pipeline does not scrape redirect targets.
+The public Adzuna Search API [only provides a description snippet](https://developer.adzuna.com/docs/search), so matching can miss requirements. A zero means no matched mention, not no demand. When the dictionary changes, rebuilding dbt rescores all stored text.
 
-The dashboard counts a group once per skill and date across selected roles. A group can mention several skills, so percentages across skills need not sum to 100%.
+New status files record description coverage and the observed 500-character boundary. Full-text enrichment would need a licensed Adzuna dataset or another authorised source with complete descriptions. The pipeline does not scrape redirect pages.
 
-For multi-day skill analysis:
+The dashboard counts a group once per skill and date across the selected roles. A group can mention several skills, so percentages across skills do not add up to 100%.
 
-- Include only dates with observations in every selected country/role segment.
-- Count no mention on an included date as zero; do not fill missing dates with zeros.
-- Divide total matching group-days by total observed group-days for the percentage.
-- Include zero-mention dates in the daily average.
+For figures that span several days, the dashboard:
 
-Observed coverage does not prove every requested API page completed. The dashboard does not yet read extraction status files. Its calculation is implemented in the dashboard; existing aggregate marts should be reviewed against these rules before building Power BI measures.
+- includes only dates with observations in every selected country and role segment;
+- counts a skill with no mention on an included date as zero, but does not add zeros for dates that were not collected;
+- divides matching group-days by observed group-days for the percentage;
+- includes zero-mention dates in the daily average.
+
+Observed coverage does not prove that every requested API page completed, and the dashboard does not read the status files yet. These rules live in the dashboard code. The aggregate marts use a simpler average, over the days on which a skill was mentioned, so they need to follow the same rules before any Power BI measures are built on them.
 
 </details>
 
 ## Run locally
 
-The dashboard needs PostgreSQL and built dbt models. Its five-minute cache can be cleared with **Refresh data** after a successful build; this button does not run dbt.
+The dashboard needs PostgreSQL and built dbt models. Its five-minute cache can be cleared with **Refresh data** after a successful build; the button does not run dbt.
 
 From the repository root in Windows PowerShell:
 
@@ -142,7 +144,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env` and supply local Adzuna and PostgreSQL credentials. Keep `.env` outside Git. Configure a local dbt profile named `dbt_job_market` targeting the PostgreSQL `analytics` schema. After creating the database and user, initialize the raw schema:
+Copy `.env.example` to `.env` and add your local Adzuna and PostgreSQL credentials. Keep `.env` out of Git. Configure a local dbt profile named `dbt_job_market` that targets the PostgreSQL `analytics` schema. After creating the database and user, create the raw schema:
 
 ```powershell
 psql -h localhost -U job_market_user -d job_market -f .\sql\001_create_raw_schema.sql
@@ -159,40 +161,39 @@ dbt build --project-dir .\dbt_job_market
 python -m streamlit run dashboard\app.py
 ```
 
-Validate or replay a specific archived date without fetching again:
+To validate or replay an archived date without fetching again:
 
 ```powershell
 python src\load\run_postgres_load.py --date 2026-09-06 --check-only
 python src\load\run_postgres_load.py --date 2026-09-06
 ```
 
-Opt-in Data Analyst collection, kept outside the current reporting workflow:
+Data Analyst collection is opt-in and kept outside the reporting workflow for now:
 
 ```powershell
 python src\extract\run_adzuna_extract.py --roles data_analyst
 ```
 
-Use `--countries gb` to collect only UK archives. The current loader still expects all six default segments for its chosen date; it does not support country or role selection.
+Use `--countries gb` to collect only UK archives. The loader still expects all six default segments for its chosen date and does not support country or role selection yet.
 
-Generate dbt documentation with `dbt docs generate --project-dir .\dbt_job_market`. Raw-layer checks are in [sql/002_raw_data_quality_checks.sql](sql/002_raw_data_quality_checks.sql).
+Generate the dbt documentation with `dbt docs generate --project-dir .\dbt_job_market`. Raw-layer checks are in [sql/002_raw_data_quality_checks.sql](sql/002_raw_data_quality_checks.sql).
 
 ## Limitations
 
-Adzuna is one source with a capped sample. Collection is manual and dates are uneven. Training and placement adverts are flagged but not excluded. Salary comparisons are not presented because salary coverage is incomplete, some amounts are predicted, and inferred currency does not resolve differences in period or salary semantics. Public API descriptions are snippets rather than guaranteed full advert text.
+Adzuna is one source with a capped sample. Collection is manual, so the dates are uneven. Training and placement adverts are flagged but not excluded. I do not compare salaries: coverage is incomplete, some amounts are predicted by Adzuna, and an inferred currency says nothing about pay period or what the figure includes. API descriptions are snippets, not guaranteed full advert text.
 
 ## Next steps
 
-Planned work, in priority order. I will learn each tool before applying it to the project. Backup and restore verification is complete; Docker and Power BI remain future learning and implementation steps.
-
-1. **Docker:** learn the container and volume setup, then create a reproducible local environment with Docker Compose.
-2. **Data Analyst reporting:** continue collecting archives and review coverage before adding the role to the loader, dbt models and dashboard. Collection can continue while the Docker work is in progress.
-3. **Power BI:** build a report using the same counting rules as Streamlit, with checks that both reports agree.
-4. **Airflow:** schedule extraction, validation, loading and dbt builds, with retries and clear failure reporting.
-5. **CI/CD:** automate code and dbt checks, then add a deployment workflow once a hosting target is chosen.
-6. **Vector search and RAG — final phase:** use PostgreSQL with pgvector to explore semantic search over collected adverts, then build a question-answering feature that cites the retrieved records. Evaluate retrieval quality and answer support, accounting for the short source descriptions. This comes after the data pipeline, reporting and automation work above.
+1. A Power BI report that uses the same counting rules as the dashboard, with a check that both give the same numbers. The aggregate marts need to follow those rules first.
+2. Data Analyst adverts in the loader, models and dashboard once enough dates are archived.
+3. Later: scheduled runs, a Docker setup and CI checks.
 
 Secrets, raw archives, backups, logs, virtual environments and generated dbt artifacts are excluded from Git.
 
-## License
+## Licence
 
 [MIT](LICENSE)
+
+## Contact
+
+Onur Soylu · [LinkedIn](https://www.linkedin.com/in/oonursoylu/)
