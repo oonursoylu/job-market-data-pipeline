@@ -11,8 +11,8 @@ I built it to see which skills appear in these adverts and how repeated postings
 - A batch pipeline that archives the raw API responses and records every date an advert appears in a search.
 - Archive validation and repeatable loading, so rerunning a load never inserts the same record twice.
 - Fourteen dbt models, one seed and 177 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency.
-- A star schema for reporting tools: one fact table of observations, dimension tables for postings, segments and skills, and a bridge table that links posting groups to skills.
-- A dashboard for comparing skill mentions, browsing adverts and inspecting repeated posting groups.
+- A star schema for reporting: one fact table of observations, dimension tables for postings, segments and skills, and a bridge table that links posting groups to skills.
+- A dashboard for comparing skill mentions, browsing adverts and inspecting repeated posting groups. It reads only the star schema, calculates its figures in SQL and has a check against the earlier pandas version.
 - SQL performance work, with every faster version checked against the original output (details below).
 
 The reporting covers Data Engineer, Analytics Engineer and AI Engineer searches in both countries. I have started collecting Data Analyst adverts too, but they are not in the dashboard yet. Collection and dbt runs are still manual.
@@ -40,14 +40,18 @@ flowchart LR
     D --> E[(PostgreSQL raw tables)]
     E --> F[dbt staging views]
     F --> G[Stored posting groups and skill matches]
-    G --> H[dbt facts and marts]
-    F --> I[Streamlit dashboard]
-    G --> I
     S[Skill dictionary] --> G
-    S --> I
+    G --> H[dbt star schema]
+    S --> H
+    G --> M[dbt daily facts and marts]
+    H --> I[Streamlit dashboard]
 ```
 
-The dashboard reads the dbt staging observations, the stored posting groups and skill matches, and the dictionary. The daily facts and reporting marts are reusable tables for other tools. Source freshness checks and dbt tests run separately from this flow.
+The dashboard reads only the star schema. Its queries in [dashboard/queries.py](dashboard/queries.py) apply the counting rules in SQL, and the same rules are described on the fact table in dbt, so another tool can follow them. The daily facts and marts are reusable aggregate tables, but their averages follow a simpler rule (see the calculation details). Source freshness checks and dbt tests run separately from this flow.
+
+## Dashboard parity check
+
+On 27 September 2026 I moved the dashboard's calculations from pandas to SQL on the star schema. [dashboard/check_parity.py](dashboard/check_parity.py) keeps a copy of the earlier pandas logic and compares it with the new queries for all 21 combinations of countries and roles, on every observed snapshot date. All 9,989 comparisons matched, including the order of skill rankings and posting lists, and shares and averages were exactly equal. When I broke five of the rules on purpose, the check caught every change.
 
 ## Backup and restore check
 
@@ -129,7 +133,7 @@ For figures that span several days, the dashboard:
 - divides matching group-days by observed group-days for the percentage;
 - includes zero-mention dates in the daily average.
 
-Observed coverage does not prove that every requested API page completed, and the dashboard does not read the status files yet. These rules live in the dashboard code. The aggregate marts use a simpler average, over the days on which a skill was mentioned, so they need to follow the same rules before any Power BI measures are built on them.
+Observed coverage does not prove that every requested API page completed, and the dashboard does not read the status files yet. The rules are applied in SQL in `dashboard/queries.py` and described on `fct_job_observations` in dbt. The aggregate marts use a simpler average, over the days on which a skill was mentioned, so reporting tools should use the star schema instead.
 
 </details>
 
@@ -162,6 +166,12 @@ dbt build --project-dir .\dbt_job_market
 python -m streamlit run dashboard\app.py
 ```
 
+To compare the dashboard queries with the earlier pandas logic after a dbt build (this takes a few minutes):
+
+```powershell
+python dashboard\check_parity.py
+```
+
 To validate or replay an archived date without fetching again:
 
 ```powershell
@@ -185,7 +195,7 @@ Adzuna is one source with a capped sample. Collection is manual, so the dates ar
 
 ## Next steps
 
-1. A Power BI report that uses the same counting rules as the dashboard, with a check that both give the same numbers. The aggregate marts need to follow those rules first.
+1. A Power BI report on the star schema that uses the same counting rules as the dashboard, with a check that both give the same numbers.
 2. Data Analyst adverts in the loader, models and dashboard once enough dates are archived.
 3. Later: scheduled runs, a Docker setup and CI checks.
 

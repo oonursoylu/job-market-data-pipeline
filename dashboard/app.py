@@ -1,145 +1,100 @@
-import os
-
 import pandas as pd
 import plotly.express as px
-import psycopg2
 import streamlit as st
 from dotenv import load_dotenv
 
+import queries
+
 
 load_dotenv()
-COUNTRIES = {"de": "Germany", "gb": "United Kingdom"}
-ROLES = {
-    "data_engineer": "Data Engineer",
-    "analytics_engineer": "Analytics Engineer",
-    "ai_engineer": "AI Engineer",
-}
-LABELS = {
-    "sql": "SQL", "aws": "AWS", "gcp": "GCP", "dbt": "dbt",
-    "power bi": "Power BI", "dax": "DAX", "postgresql": "PostgreSQL",
-    "mysql": "MySQL", "mongodb": "MongoDB", "mlflow": "MLflow",
-    "a/b testing": "A/B Testing", "ci/cd": "CI/CD", "etl/elt": "ETL / ELT",
-    "llm": "LLM", "numpy": "NumPy", "scikit-learn": "scikit-learn",
-}
 PLOTLY_CONFIG = {
     "displayModeBar": False,
     "displaylogo": False,
     "responsive": True,
 }
+SKILL_COLUMNS = {
+    "skill_label": "Skill",
+    "group_days_with_mention": "Group-days with mention",
+    "share_of_observed_group_days": "Share of observed group-days (%)",
+    "average_groups_per_observed_day": "Average groups per observed day",
+}
 
 
-def skill_label(value):
-    return LABELS.get(value, str(value).title())
-
-
-def read_frame(connection, query):
-    with connection.cursor() as cursor:
-        cursor.execute(query)
-        return pd.DataFrame(cursor.fetchall(), columns=[item[0] for item in cursor.description])
-
-
-@st.cache_data(ttl=300)
-def load_data():
-    connection = psycopg2.connect(
-        host=os.getenv("POSTGRES_HOST"), port=os.getenv("POSTGRES_PORT"),
-        dbname=os.getenv("POSTGRES_DB"), user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"), connect_timeout=5,
-    )
+def with_connection(read):
+    connection = queries.connect()
     try:
-        connection.set_session(readonly=True, isolation_level="REPEATABLE READ")
-        with connection.cursor() as cursor:
-            cursor.execute("SET statement_timeout = 20000")
-        observations = read_frame(connection, """
-            select o.source, o.job_id, o.search_country, o.search_role, o.extract_date,
-                   g.posting_group_id, p.job_title, p.company_name, p.location,
-                   p.company_name_was_missing, p.description_is_likely_truncated,
-                   p.is_training_or_placement,
-                   p.salary_is_available, p.salary_currency_was_inferred, p.currency,
-                   p.posted_date,
-                   case when p.posted_date is not null
-                        then greatest(o.extract_date - p.posted_date, 0) end as posting_age_days,
-                   coalesce(o.extract_date - p.posted_date > 90, false) as is_stale,
-                   p.redirect_url
-            from analytics.stg_job_posting_observations o
-            join analytics.stg_job_postings p using (source, job_id)
-            join analytics.int_job_posting_groups g using (source, job_id)
-            where o.search_country in ('de', 'gb')
-              and o.search_role in ('data_engineer', 'analytics_engineer', 'ai_engineer')
-        """)
-        skills = read_frame(connection, """
-            select source, job_id, skill, category
-            from analytics.int_job_posting_skills
-        """)
-        dictionary = read_frame(connection, "select skill, category from analytics.skill_dictionary")
-        return observations, skills, dictionary
+        return read(connection)
     finally:
         connection.rollback()
         connection.close()
 
 
-def scope_rows(frame, countries, roles):
-    return frame[frame.search_country.isin(countries) & frame.search_role.isin(roles)].copy()
+# Each loader reads in one transaction. Refresh data clears all of them.
+@st.cache_data(ttl=300)
+def load_segments():
+    return with_connection(queries.reporting_segments)
 
 
-def group_count(frame):
-    return frame.posting_group_id.nunique()
+@st.cache_data(ttl=300)
+def load_scope(countries, roles):
+    return with_connection(lambda connection: (
+        queries.observed_dates(connection, countries, roles),
+        queries.archive_counts(connection, countries, roles),
+        queries.coverage(connection, countries, roles),
+    ))
 
 
-def skill_metrics(observations, skills, dictionary, countries, roles, start, end):
-    selected = scope_rows(observations, countries, roles)
-    selected = selected[selected.extract_date.between(start, end)]
-    # Compare only dates with observations in every selected segment.
-    coverage = selected.drop_duplicates(["extract_date", "search_country", "search_role"])
-    counts = coverage.groupby("extract_date").size()
-    dates = counts[counts == len(countries) * len(roles)].index
-    selected = selected[selected.extract_date.isin(dates)]
-    denominator = selected.groupby("extract_date").posting_group_id.nunique().sort_index()
-    matches = selected.merge(skills, on=["source", "job_id"], how="inner")
-    matches = matches.drop_duplicates(["extract_date", "posting_group_id", "skill"])
-    all_skills = dictionary.skill.tolist()
-    if denominator.empty:
-        return pd.DataFrame(), pd.DataFrame(), denominator
-    daily = matches.groupby(["extract_date", "skill"]).size().unstack(fill_value=0)
-    daily = daily.reindex(index=denominator.index, columns=all_skills, fill_value=0).fillna(0)
-    # No match on an observed date is zero. Uncollected dates are not added.
-    summary = dictionary.copy().set_index("skill")
-    summary["Group-days with mention"] = daily.sum()
-    summary["Share of observed group-days (%)"] = daily.sum() / denominator.sum() * 100
-    summary["Average groups per observed day"] = daily.mean()
-    summary = summary.reset_index()
-    summary["Skill"] = summary.skill.map(skill_label)
-    return summary.sort_values(["Group-days with mention", "Skill"], ascending=[False, True]), daily, denominator
+@st.cache_data(ttl=300)
+def load_snapshot(countries, roles, snapshot_date):
+    return with_connection(lambda connection: (
+        queries.snapshot_counts(connection, countries, roles, snapshot_date),
+        queries.segment_counts(connection, countries, roles, snapshot_date),
+        queries.snapshot_postings(connection, countries, roles, snapshot_date),
+        queries.quality_counts(connection, countries, roles, snapshot_date),
+        queries.repeated_groups(connection, countries, roles, snapshot_date),
+    ))
+
+
+@st.cache_data(ttl=300)
+def load_skills(countries, roles, start, end):
+    summary, daily = with_connection(
+        lambda connection: queries.skill_metrics(connection, countries, roles, start, end)
+    )
+    return summary.rename(columns=SKILL_COLUMNS), daily
+
+
+def load(loader, *args):
+    try:
+        return loader(*args)
+    except Exception:
+        st.error("Could not load data. Check that PostgreSQL is running and the dbt models are available.")
+        st.stop()
 
 
 st.set_page_config(page_title="Job Market Explorer", page_icon="📊", layout="wide")
 st.title("Job Market Explorer")
 st.caption("Explore collected job adverts, skill mentions and repeated posting groups.")
+segments = load(load_segments)
+country_names = dict(segments[["search_country", "country_name"]].drop_duplicates().itertuples(index=False, name=None))
+role_names = dict(segments[["search_role", "role_name"]].drop_duplicates().itertuples(index=False, name=None))
 with st.sidebar:
     st.header("Scope")
-    countries = st.multiselect("Countries", list(COUNTRIES), default=list(COUNTRIES), format_func=COUNTRIES.get)
-    roles = st.multiselect("Search roles", list(ROLES), default=list(ROLES), format_func=ROLES.get)
+    countries = st.multiselect("Countries", list(country_names), default=list(country_names), format_func=country_names.get)
+    roles = st.multiselect("Search roles", list(role_names), default=list(role_names), format_func=role_names.get)
     if st.button("Refresh data"):
-        load_data.clear()
+        st.cache_data.clear()
     st.caption("Data Analyst archives are being collected separately; reporting integration is pending.")
 if not countries or not roles:
     st.info("Select at least one country and search role.")
     st.stop()
-try:
-    observations, skills, dictionary = load_data()
-except Exception:
-    st.error("Could not load data. Check that PostgreSQL is running and the dbt models are available.")
+countries, roles = tuple(countries), tuple(roles)
+available_dates, archive, coverage = load(load_scope, countries, roles)
+if not available_dates:
+    collected_dates = load(load_scope, tuple(country_names), tuple(role_names))[0]
+    st.info("No observations match this scope." if collected_dates else "No observations are available yet.")
     st.stop()
-if observations.empty:
-    st.info("No observations are available yet.")
-    st.stop()
-observations["extract_date"] = pd.to_datetime(observations.extract_date).dt.date
-scoped = scope_rows(observations, countries, roles)
-if scoped.empty:
-    st.info("No observations match this scope.")
-    st.stop()
-available_dates = sorted(scoped.extract_date.unique(), reverse=True)
 snapshot_date = st.sidebar.selectbox("Snapshot date", available_dates)
-snapshot = scoped[scoped.extract_date == snapshot_date]
+counts, by_role, posts, quality, repeated = load(load_snapshot, countries, roles, snapshot_date)
 st.caption(f"Snapshot: {snapshot_date} | {len(countries)} countries · {len(roles)} search roles | Skills has its own date window.")
 with st.expander("How to read this dashboard"):
     st.write("One API source, with up to 150 results per country and search role in each collection. Counts describe this sample, not total market demand. Search roles can overlap.")
@@ -149,25 +104,17 @@ with st.expander("How to read this dashboard"):
 overview_tab, skills_tab, explore_tab, quality_tab = st.tabs(["Overview", "Skills", "Explore Postings", "Data Quality"])
 with overview_tab:
     st.subheader("Selected snapshot")
-    source_count = len(snapshot.drop_duplicates(["source", "job_id"]))
-    groups = group_count(snapshot)
+    source_count = int(counts.source_postings)
+    groups = int(counts.analytical_groups)
     reduction = source_count - groups
     a, b, c = st.columns(3)
     a.metric("Source postings", f"{source_count:,}")
     b.metric("Analytical groups", f"{groups:,}")
     c.metric("Fewer entries after grouping", f"{reduction:,}", help="Source count minus group count. Not a confirmed duplicate count.")
     st.caption(f"{source_count:,} source postings become {groups:,} groups. Counts fall by {reduction / source_count:.1%}; this does not prove that the difference consists of duplicate vacancies.")
-    by_role = snapshot.groupby(["search_country", "search_role"]).agg(
-        source_postings=("job_id", "nunique"), analytical_groups=("posting_group_id", "nunique")
-    ).reset_index()
-    country_order = {country: index for index, country in enumerate(COUNTRIES)}
-    role_order = {role: index for index, role in enumerate(ROLES)}
-    by_role["country_order"] = by_role.search_country.map(country_order)
-    by_role["role_order"] = by_role.search_role.map(role_order)
-    by_role = by_role.sort_values(["country_order", "role_order"], kind="stable")
-    by_role["Segment"] = by_role.search_country.map(COUNTRIES) + " / " + by_role.search_role.map(ROLES)
     by_role["Reduction (%)"] = (1 - by_role.analytical_groups / by_role.source_postings) * 100
-    chart = by_role.rename(columns={"source_postings": "Source postings", "analytical_groups": "Analytical groups"})
+    chart = by_role.rename(columns={
+        "segment_name": "Segment", "source_postings": "Source postings", "analytical_groups": "Analytical groups"})
     melted = chart.melt(id_vars="Segment", value_vars=["Source postings", "Analytical groups"], var_name="Measure", value_name="Count")
     segment_order = chart.Segment.tolist()
     role_figure = px.bar(
@@ -189,11 +136,9 @@ with overview_tab:
     with st.expander("View segment details"):
         st.dataframe(chart[["Segment", "Source postings", "Analytical groups", "Reduction (%)"]].round(1), hide_index=True, width="stretch")
     with st.expander("Accumulated archive for this scope"):
-        st.write(f"{len(scoped.drop_duplicates(['source', 'job_id'])):,} distinct source postings across {scoped.extract_date.nunique()} observed dates. These are not all currently open jobs.")
+        st.write(f"{int(archive.source_postings):,} distinct source postings across {int(archive.observed_dates)} observed dates. These are not all currently open jobs.")
     st.subheader("Most mentioned skills in the selected snapshot")
-    snapshot_summary, _, snapshot_denominator = skill_metrics(
-        observations, skills, dictionary, countries, roles, snapshot_date, snapshot_date
-    )
+    snapshot_summary, _ = load(load_skills, countries, roles, snapshot_date, snapshot_date)
     if snapshot_summary.empty:
         st.info("Skill comparison is unavailable: some selected country/role segments have no observations on this date.")
     else:
@@ -232,12 +177,12 @@ with skills_tab:
     window = st.radio("Skill window", ["Last 30 calendar days", "All observed dates"], horizontal=True)
     end = snapshot_date
     start = (pd.Timestamp(end) - pd.Timedelta(days=29)).date() if window.startswith("Last") else min(available_dates)
-    summary, daily, denominator = skill_metrics(observations, skills, dictionary, countries, roles, start, end)
+    summary, daily = load(load_skills, countries, roles, start, end)
     st.caption(f"Window: {start} to {end}. Only dates with observations in every selected country/role segment are included. This does not prove that every API page completed.")
     if summary.empty:
         st.info("No dates have observations in every selected segment. Try a wider window or fewer segments.")
     else:
-        st.caption(f"{len(denominator)} included dates · {int(denominator.sum()):,} observed group-days. A group counts once per date across selected roles. The same group can count on different dates.")
+        st.caption(f"{int(summary.included_dates.iloc[0])} included dates · {int(summary.observed_group_days.iloc[0]):,} observed group-days. A group counts once per date across selected roles. The same group can count on different dates.")
         st.write("**Top skills in the collected data**")
         top = summary[summary["Group-days with mention"] > 0].head(15)
         if top.empty:
@@ -261,15 +206,16 @@ with skills_tab:
             top_skill_figure.update_xaxes(rangemode="tozero", ticksuffix="%")
             st.plotly_chart(top_skill_figure, width="stretch", config=PLOTLY_CONFIG)
         columns = ["Skill", "Group-days with mention", "Share of observed group-days (%)", "Average groups per observed day"]
+        labels = dict(zip(summary.skill, summary.Skill))
         with st.expander("Build a personal skill watchlist"):
-            watched = st.multiselect("Choose skills", dictionary.skill.tolist(),
-                default=[s for s in ["databricks", "microsoft fabric", "power bi", "dbt", "spark", "a/b testing"] if s in dictionary.skill.values],
-                format_func=skill_label)
+            watched = st.multiselect("Choose skills", sorted(labels, key=lambda skill: labels[skill].casefold()),
+                default=[s for s in ["databricks", "microsoft fabric", "power bi", "dbt", "spark", "a/b testing"] if s in labels],
+                format_func=labels.get)
             st.caption("This is a personal watchlist, not a market ranking. Zero means no matched mention in the available title and snippet text.")
             st.dataframe(summary[summary.skill.isin(watched)][columns].round(2), hide_index=True, width="stretch")
-        choice = st.selectbox("Skill trend", summary.skill.tolist(), format_func=skill_label)
-        trend = pd.DataFrame({"Date": denominator.index, "Groups with mention": daily[choice].values,
-                              "Observed groups": denominator.values})
+        choice = st.selectbox("Skill trend", summary.skill.tolist(), format_func=labels.get)
+        trend = daily[daily.skill == choice].rename(columns={
+            "extract_date": "Date", "groups_with_mention": "Groups with mention", "observed_groups": "Observed groups"})
         trend["Share (%)"] = trend["Groups with mention"] / trend["Observed groups"] * 100
         trend_figure = px.line(
             trend,
@@ -277,7 +223,7 @@ with skills_tab:
             y="Share (%)",
             markers=True,
             custom_data=["Groups with mention", "Observed groups"],
-            title=f"{skill_label(choice)} in observed groups",
+            title=f"{labels[choice]} in observed groups",
             color_discrete_sequence=["#2563eb"],
         )
         trend_figure.update_traces(
@@ -300,13 +246,6 @@ with skills_tab:
 with explore_tab:
     st.subheader("Inspect the selected snapshot")
     search = st.text_input("Search postings", placeholder="Job title, company or location")
-    posts = snapshot.sort_values(["source", "job_id", "search_role"]).drop_duplicates(["source", "job_id"])
-    posts = posts.sort_values(
-        ["posted_date", "job_title", "company_name"],
-        ascending=[False, True, True],
-        na_position="last",
-        kind="stable",
-    )
     if search.strip():
         mask = pd.Series(False, index=posts.index)
         for column in ["job_title", "company_name", "location"]:
@@ -327,13 +266,12 @@ with explore_tab:
 
 with quality_tab:
     st.subheader("Selected snapshot quality signals")
-    quality_posts = snapshot.sort_values(["source", "job_id", "search_role"]).drop_duplicates(["source", "job_id"])
-    quality_count = len(quality_posts)
-    missing_companies = int(quality_posts.company_name_was_missing.fillna(False).sum())
-    likely_truncated = int(quality_posts.description_is_likely_truncated.fillna(False).sum())
-    salaries_available = int(quality_posts.salary_is_available.fillna(False).sum())
-    stale_postings = int(quality_posts.is_stale.fillna(False).sum())
-    training_postings = int(quality_posts.is_training_or_placement.fillna(False).sum())
+    quality_count = int(quality.source_postings)
+    missing_companies = int(quality.missing_companies)
+    likely_truncated = int(quality.likely_truncated)
+    salaries_available = int(quality.salaries_available)
+    stale_postings = int(quality.stale_postings)
+    training_postings = int(quality.training_postings)
     q1, q2, q3, q4 = st.columns(4)
     q1.metric("Unknown companies", f"{missing_companies:,}", help="The source company name was missing; raw data remains unchanged.")
     q2.metric("Likely truncated snippets", f"{likely_truncated:,}", help="Descriptions at the observed 500-character API boundary.")
@@ -344,24 +282,17 @@ with quality_tab:
         "internship or placement-style adverts. They remain in the sample."
     )
     salary_share = salaries_available / quality_count if quality_count else 0
-    inferred_currency = int(
-        quality_posts.loc[quality_posts.salary_is_available, "salary_currency_was_inferred"]
-        .fillna(False)
-        .sum()
-    )
+    inferred_currency = int(quality.inferred_currency)
     st.caption(
         f"Salary coverage is {salary_share:.1%}. For {inferred_currency:,} postings with usable salary data, "
         "currency is inferred from the search country (EUR for Germany, GBP for the UK) and kept separate from source-provided currency."
     )
     st.subheader("Repeated posting groups")
-    repeated = snapshot.drop_duplicates(["source", "job_id"]).groupby("posting_group_id").agg(
-        Company=("company_name", "first"), Title=("job_title", "first"),
-        Source_postings=("job_id", "size"), Locations=("location", "nunique")
-    ).reset_index()
-    repeated = repeated[repeated.Source_postings > 1].sort_values("Source_postings", ascending=False)
     st.caption("Selected snapshot. Matching text can identify repeated adverts but can also combine separate vacancies. Training and placement adverts have not been excluded.")
-    st.dataframe(repeated[["Company", "Title", "Source_postings", "Locations"]].rename(columns={"Source_postings": "Source postings"}).head(20), hide_index=True, width="stretch")
+    st.dataframe(repeated[["company", "title", "source_postings", "locations"]].rename(columns={
+        "company": "Company", "title": "Title", "source_postings": "Source postings", "locations": "Locations"}),
+        hide_index=True, width="stretch")
     st.subheader("Observed collection coverage")
-    coverage = scoped.groupby(["extract_date", "search_country", "search_role"]).job_id.nunique().reset_index(name="Source postings")
-    st.dataframe(coverage.sort_values(["extract_date", "search_country", "search_role"], ascending=[False, True, True]), hide_index=True, width="stretch")
+    st.dataframe(coverage[["extract_date", "search_country", "search_role", "source_postings"]].rename(
+        columns={"source_postings": "Source postings"}), hide_index=True, width="stretch")
     st.caption("This table shows database observations, not extraction-status verification. A missing segment is unknown, not zero. Status-file integration is a separate follow-up.")
