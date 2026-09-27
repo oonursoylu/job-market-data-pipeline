@@ -1,0 +1,127 @@
+version: 2
+
+models:
+  - name: dim_segments
+    description: "Country and search-role segments with display names and sort order. Only segments with is_reporting_segment are shown in reporting."
+    columns:
+      - name: segment_id
+        description: "Segment key: search_country and search_role joined with a pipe."
+        data_tests:
+          - not_null
+          - unique
+      - name: search_country
+        description: "Country code used in the search request."
+        data_tests:
+          - not_null
+      - name: search_role
+        description: "Role keyword group used in the search request."
+        data_tests:
+          - not_null
+      - name: is_reporting_segment
+        description: "False for segments that are collected but not reported yet."
+        data_tests:
+          - not_null
+
+  - name: dim_skills
+    description: "Tracked skills with display labels, categories and the aliases used for matching."
+    columns:
+      - name: skill
+        description: "Normalised skill name from the skill dictionary."
+        data_tests:
+          - not_null
+          - unique
+      - name: skill_label
+        description: "Display label shared by the dashboard and BI tools."
+        data_tests:
+          - not_null
+          - unique
+      - name: category
+        description: "High-level skill category."
+        data_tests:
+          - not_null
+
+  - name: dim_job_postings
+    description: "One row per source posting with its analytical group and quality flags."
+    columns:
+      - name: job_posting_key
+        description: "Hash of source and job_id, a single-column key for BI relationships."
+        data_tests:
+          - not_null
+          - unique
+      - name: job_id
+        description: "Job identifier from the source system."
+        data_tests:
+          - not_null
+          - unique
+      - name: posting_group_id
+        description: "Analytical group of the posting. Groups are not verified unique vacancies."
+        data_tests:
+          - not_null
+
+  - name: fct_job_observations
+    description: >
+      One row per observation: a posting seen in one country and role search on one date.
+      Source postings are counted as distinct job_posting_key and analytical groups as distinct posting_group_id.
+      A skill share over a period is the sum, over included dates, of groups with a mention divided by the sum of observed groups.
+      A date is included only when every selected segment has observations on it; uncollected dates are never counted as zero.
+    columns:
+      - name: observation_id
+        description: "Observation key from the staging model."
+        data_tests:
+          - not_null
+          - unique
+      - name: job_posting_key
+        description: "Key to dim_job_postings."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_job_postings')
+                field: job_posting_key
+      - name: segment_id
+        description: "Key to dim_segments."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_segments')
+                field: segment_id
+      - name: posting_group_id
+        description: "Analytical group of the observed posting; key to bridge_posting_group_skills."
+        data_tests:
+          - not_null
+      - name: extract_date
+        description: "Date the batch pipeline observed the posting."
+        data_tests:
+          - not_null
+      - name: posting_age_days
+        description: "Days between the source posting date and the observation date, floored at zero. A quality signal, not proof of closure."
+      - name: is_stale_at_observation
+        description: "True when the posting was more than 90 days old at this observation."
+        data_tests:
+          - not_null
+
+  - name: bridge_posting_group_skills
+    description: "Skills matched by each analytical group. A group counts once per skill, however many aliases or members match."
+    columns:
+      - name: posting_group_skill_id
+        description: "Hash of posting_group_id and skill."
+        data_tests:
+          - not_null
+          - unique
+      - name: posting_group_id
+        description: "Analytical group with a skill mention."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_job_postings')
+                field: posting_group_id
+      - name: skill
+        description: "Matched skill; key to dim_skills."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_skills')
+                field: skill
