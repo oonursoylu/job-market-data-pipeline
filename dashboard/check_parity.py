@@ -10,14 +10,16 @@ import queries
 
 # Compares the SQL in queries.py with the pandas logic the dashboard used before
 # it moved to the star schema. The reference functions are copied from that
-# version of app.py. Skill labels come from dim_skills, so the corrected labels
-# do not change the tie-break order. Run from the repository root after dbt build:
+# version of app.py, with Data Analyst added to the role lists when that role joined
+# the dashboard. Skill labels come from dim_skills, so the corrected labels do not
+# change the tie-break order. Run from the repository root after dbt build:
 #   python dashboard\check_parity.py
 COUNTRIES = {"de": "Germany", "gb": "United Kingdom"}
 ROLES = {
     "data_engineer": "Data Engineer",
     "analytics_engineer": "Analytics Engineer",
     "ai_engineer": "AI Engineer",
+    "data_analyst": "Data Analyst",
 }
 POSTING_COLUMNS = ["source", "job_id", "job_title", "company_name", "location", "posted_date", "redirect_url"]
 QUALITY_COLUMNS = [
@@ -39,7 +41,7 @@ OBSERVATIONS_SQL = """
     join analytics.stg_job_postings p using (source, job_id)
     join analytics.int_job_posting_groups g using (source, job_id)
     where o.search_country in ('de', 'gb')
-      and o.search_role in ('data_engineer', 'analytics_engineer', 'ai_engineer')
+      and o.search_role in ('data_engineer', 'analytics_engineer', 'ai_engineer', 'data_analyst')
 """
 
 

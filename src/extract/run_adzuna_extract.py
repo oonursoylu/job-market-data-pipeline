@@ -87,9 +87,8 @@ def run_extract(country: str, search_role: str, max_pages: int = 2, results_per_
 
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Collect selected job search segments.")
-    parser.add_argument("--roles", nargs="+", choices=list(SEARCH_ROLES),
-                        default=["data_engineer", "analytics_engineer", "ai_engineer"],
-                        help="Search roles to collect. Data Analyst is opt-in during archive-only collection.")
+    parser.add_argument("--roles", nargs="+", choices=list(SEARCH_ROLES), default=list(SEARCH_ROLES),
+                        help="Search roles to collect (default: all four).")
     parser.add_argument("--countries", nargs="+", choices=["de", "gb"], default=["de", "gb"])
     args = parser.parse_args(argv)
     countries = list(dict.fromkeys(args.countries))

@@ -117,6 +117,7 @@ models:
                   - data_engineer
                   - analytics_engineer
                   - ai_engineer
+                  - data_analyst
 
       - name: extract_date
         description: Date when the API extraction was executed.

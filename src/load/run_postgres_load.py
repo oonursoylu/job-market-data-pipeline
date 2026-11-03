@@ -10,6 +10,9 @@ from jsonl_reader import read_jsonl
 from postgres_loader import insert_job_posting_observations, insert_job_postings
 
 
+ROLES = ["data_engineer", "analytics_engineer", "ai_engineer", "data_analyst"]
+
+
 def run_load(file_path: str | Path, search_role: str, search_country: str, extract_date: date) -> None:
     raw_jobs = read_jsonl(file_path)
 
@@ -49,10 +52,13 @@ def main(argv=None) -> None:
                         help="Archive date in YYYY-MM-DD format (default: today).")
     parser.add_argument("--check-only", action="store_true",
                         help="Validate all expected archives without writing to PostgreSQL.")
+    # Dates before 2026-09-06 have no Data Analyst archives; pass the other three roles to replay them.
+    parser.add_argument("--roles", nargs="+", choices=ROLES, default=ROLES,
+                        help="Roles to load (default: all four).")
     args = parser.parse_args(argv)
 
     countries = ["de", "gb"]
-    roles = ["data_engineer", "analytics_engineer", "ai_engineer"]
+    roles = list(dict.fromkeys(args.roles))
     batch = [
         (country, role, Path("data/raw/adzuna") / f"country={country}"
          / f"search_role={role}" / f"date={args.extract_date.isoformat()}" / "jobs.jsonl")

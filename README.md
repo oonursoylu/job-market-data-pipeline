@@ -2,7 +2,7 @@
 
 I collect data-job adverts from Germany and the UK through the Adzuna API, keep every raw response, load them into PostgreSQL and model them with dbt. A Streamlit dashboard sits on top.
 
-I built it to see which skills appear in these adverts and how repeated postings distort the counts. It also covers the less glamorous side of data work: loads that are safe to rerun, adverts that show up several times, data quality checks and slow SQL.
+I built it to see which skills appear in these adverts and how repeated postings distort the counts. Most of the work went into things a dashboard does not show: loads that can be rerun safely, adverts that turn up more than once, data quality checks and a few slow queries.
 
 **Built with:** Python · PostgreSQL · dbt Core · Streamlit · Plotly
 
@@ -12,14 +12,14 @@ I built it to see which skills appear in these adverts and how repeated postings
 - Archive validation and repeatable loading, so rerunning a load never inserts the same record twice.
 - Eleven dbt models, one seed and 133 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency.
 - A star schema for reporting: one fact table of observations, dimension tables for postings, posting groups, segments and skills, and a bridge table that links posting groups to skills.
-- A dashboard for comparing skill mentions, browsing adverts and inspecting repeated posting groups. It reads only the star schema, calculates its figures in SQL and has a check against the earlier pandas version.
+- A Streamlit dashboard for comparing skill mentions, browsing adverts and looking at repeated posting groups. Every number in it comes from SQL on the star schema.
 - SQL performance work, with every faster version checked against the original output (details below).
 
-The reporting covers Data Engineer, Analytics Engineer and AI Engineer searches in both countries. I have started collecting Data Analyst adverts too, but they are not in the dashboard yet. Collection and dbt runs are still manual.
+The reporting covers four searches in both countries: Data Engineer, Analytics Engineer, AI Engineer and Data Analyst. I only started collecting Data Analyst adverts on 6 September 2026, so that role has fewer dates than the other three. Collection and dbt runs are still manual.
 
 ## Dashboard
 
-The Overview tab compares source postings with analytical groups for the selected date and shows the most mentioned skills. Country and role filters narrow the sample.
+The Overview tab compares source postings with analytical groups for the selected date and shows the most mentioned skills. Country and role filters narrow the sample. All four roles are selected when it opens. Since Data Analyst collection started later, skill figures over several days only use dates from 6 September 2026 while that role is selected.
 
 ![Overview tab of the dashboard](docs/screenshots/dashboard_overview.png)
 
@@ -30,7 +30,7 @@ The Overview tab compares source postings with analytical groups for the selecte
 | Explore Postings | Search by job title, company or location |
 | Data Quality | Missing companies, truncated snippets, salary coverage, posting age, repeated posting groups and observed collection coverage |
 
-The skill dictionary includes tools such as Databricks, Microsoft Fabric and Power BI. They are terms found in adverts, not tools used to build this pipeline.
+The skill dictionary includes tools such as Databricks, Microsoft Fabric and Power BI because they come up in adverts. I did not use them to build this pipeline.
 
 ## Architecture
 
@@ -54,6 +54,8 @@ The dashboard reads only the star schema. Its queries in [dashboard/queries.py](
 
 On 27 September 2026 I moved the dashboard's calculations from pandas to SQL on the star schema. [dashboard/check_parity.py](dashboard/check_parity.py) keeps a copy of the earlier pandas logic and compares it with the new queries for all 21 combinations of countries and roles, on every observed snapshot date. All 9,989 comparisons matched, including the order of skill rankings and posting lists, and shares and averages were exactly equal. When I broke five of the rules on purpose, the check caught every change.
 
+Adding Data Analyst in November took the check up to 45 country and role combinations. On 3 November 2026 it ran 18,853 comparisons with no differences.
+
 ## Backup and restore check
 
 On 7 September 2026 I restored a PostgreSQL backup into a separate test database and compared it with the source. All 11 tables matched, including duplicate rows, and so did the table structures, constraints, indexes, views, ownership and sequence state. The comparisons were read-only and left the source database untouched. The restore ran on the same PostgreSQL 18.4 server, and the backup archive is kept outside Git.
@@ -74,14 +76,14 @@ For the latest-postings model, the query plan showed PostgreSQL estimating 1 row
 
 The skill table itself was still slow to build. PostgreSQL inlines a CTE that is used only once, so the text cleaning (lower-casing and `regexp_replace`) ended up inside the join and ran again for every posting and skill pair. The model now declares that CTE as `MATERIALIZED`, so each posting's text is cleaned once. On 27 September 2026 the skill table build fell from 28.58 s to 2.78 s, and the new table matched the old one row for row in both directions.
 
-Run dbt after loading new postings or changing the dictionary.
+Because the matches are stored, dbt has to run again after new postings are loaded or the dictionary changes.
 
 <details>
 <summary>Data handling and calculation details</summary>
 
 ### Collection and loading
 
-Each default run requests three pages of up to 50 results for six country and role segments. That is up to 900 returned records, which is not the same as 900 distinct adverts or new observations.
+Each default run asks for three pages of up to 50 results for eight country and role segments. That is up to 1,200 records, but the same advert can come back in more than one search, so a run has fewer distinct adverts than records.
 
 Archives use this layout:
 
@@ -94,7 +96,7 @@ data/raw/adzuna/country=XX/search_role=ROLE/date=YYYY-MM-DD/
 - An existing archive or status file blocks another extraction for that segment and date.
 - JSONL is written to a temporary file first and never replaces an existing archive.
 - Status files record the requested pages, records per page, completion status, description coverage and an archive checksum.
-- The loader validates all six expected archives before it loads any segment.
+- The loader validates all eight expected archives before it loads any segment.
 - Older archives without a status file are accepted with a warning, because their page completion cannot be verified.
 - Database constraints and `ON CONFLICT DO NOTHING` stop repeated postings and observations from being inserted again.
 - Loading commits one segment at a time rather than the whole batch in one transaction. If the database fails midway, earlier segments stay loaded, and a rerun completes the rest safely.
@@ -103,7 +105,7 @@ data/raw/adzuna/country=XX/search_role=ROLE/date=YYYY-MM-DD/
 
 The raw catalogue stores one row per `source + job_id`. Observations record each date a posting appeared in a country and role search.
 
-Analytical groups combine source, country, normalised company, normalised title and a hash of the description. Location is left out on purpose, so the same advert posted in several cities falls into one group. Matching text can also mean reposts or separate vacancies with similar wording, so **groups are not verified unique vacancies**. The gap between source and group counts is not a confirmed duplicate count or a measure of market inflation.
+Analytical groups combine source, country, normalised company, normalised title and a hash of the description. Location is left out on purpose, so the same advert posted in several cities falls into one group. Matching text can also mean reposts or separate vacancies with similar wording, so a group is not a verified unique vacancy, and the gap between source and group counts is not a confirmed duplicate count.
 
 ### Data cleaning and quality flags
 
@@ -112,7 +114,7 @@ Raw API values stay unchanged. Cleaning happens in dbt, so the source payload ca
 - Missing company names show as `Unknown`, with `company_name_was_missing` set. These records get job-specific grouping keys, so they are never merged by accident.
 - Non-positive salary bounds are treated as missing in the cleaned fields. The original values stay in `source_salary_min` and `source_salary_max`.
 - Currency is only assigned when there is usable salary data. A missing source currency is inferred as EUR for Germany and GBP for the UK, and `salary_currency_was_inferred` keeps that lineage.
-- Posting age and a 90-day stale flag are quality signals, not evidence that a vacancy has closed. Training, internship and placement-style titles are flagged rather than deleted.
+- Posting age and a 90-day stale flag are only quality signals, since an old advert can still be open. Training, internship and placement-style titles are flagged rather than deleted.
 - Description length, snippet status and likely truncation are exposed as columns for quality monitoring.
 
 ### Skill mentions
@@ -180,25 +182,24 @@ python src\load\run_postgres_load.py --date 2026-09-06 --check-only
 python src\load\run_postgres_load.py --date 2026-09-06
 ```
 
-Data Analyst collection is opt-in and kept outside the reporting workflow for now:
+Dates before 6 September 2026 have no Data Analyst archives, so replay them with the other three roles:
 
 ```powershell
-python src\extract\run_adzuna_extract.py --roles data_analyst
+python src\load\run_postgres_load.py --date 2026-08-29 --roles data_engineer analytics_engineer ai_engineer
 ```
 
-Use `--countries gb` to collect only UK archives. The loader still expects all six default segments for its chosen date and does not support country or role selection yet.
+Both scripts take `--roles` to work on fewer roles. The extractor also takes `--countries gb` to collect only UK archives, while the loader always loads both countries.
 
 Generate the dbt documentation with `dbt docs generate --project-dir .\dbt_job_market`. Raw-layer checks are in [sql/002_raw_data_quality_checks.sql](sql/002_raw_data_quality_checks.sql).
 
 ## Limitations
 
-Adzuna is one source with a capped sample. Collection is manual, so the dates are uneven. Training and placement adverts are flagged but not excluded. I do not compare salaries: coverage is incomplete, some amounts are predicted by Adzuna, and an inferred currency says nothing about pay period or what the figure includes. API descriptions are snippets, not guaranteed full advert text.
+Adzuna is one source with a capped sample. Collection is manual, so the dates are uneven. Training and placement adverts are flagged but not excluded. I do not compare salaries: coverage is incomplete, some amounts are predicted by Adzuna, and an inferred currency says nothing about pay period or what the figure includes. API descriptions are only snippets of the full advert.
 
 ## Next steps
 
 1. A Power BI report on the star schema that uses the same counting rules as the dashboard, with a check that both give the same numbers.
-2. Data Analyst adverts in the loader, models and dashboard once enough dates are archived.
-3. Later: scheduled runs, a Docker setup and CI checks.
+2. Later: scheduled runs, a Docker setup and CI checks.
 
 Secrets, raw archives, backups, logs, virtual environments and generated dbt artifacts are excluded from Git.
 

@@ -83,7 +83,7 @@ with st.sidebar:
     roles = st.multiselect("Search roles", list(role_names), default=list(role_names), format_func=role_names.get)
     if st.button("Refresh data"):
         st.cache_data.clear()
-    st.caption("Data Analyst archives are being collected separately; reporting integration is pending.")
+    st.caption("Data Analyst searches start on 6 September 2026. Earlier dates cover only the three engineer roles.")
 if not countries or not roles:
     st.info("Select at least one country and search role.")
     st.stop()

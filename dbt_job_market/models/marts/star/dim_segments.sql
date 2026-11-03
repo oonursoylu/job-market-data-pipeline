@@ -1,7 +1,7 @@
 {{ config(materialized='table') }}
 
 -- Display names and sort order live here, so the dashboard and BI tools share them.
--- Data Analyst is listed but kept out of reporting until enough dates are loaded.
+-- is_reporting_segment can hide a role that is collected but not ready to report.
 with countries as (
 
     select *
@@ -21,7 +21,7 @@ roles as (
             ('data_engineer', 'Data Engineer', 1, true),
             ('analytics_engineer', 'Analytics Engineer', 2, true),
             ('ai_engineer', 'AI Engineer', 3, true),
-            ('data_analyst', 'Data Analyst', 4, false)
+            ('data_analyst', 'Data Analyst', 4, true)
     ) as role_values (search_role, role_name, role_sort_order, is_reporting_segment)
 
 )
