@@ -2,6 +2,7 @@
 
 Run from the repository root after dbt build:  python -m tests.dashboard_smoke
 """
+import faulthandler
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ def problems(app_test) -> list[str]:
 
 
 def main() -> int:
+    faulthandler.enable()  # if native code crashes (exit code 139), print where it happened
     sys.path.insert(0, str(APP.parent))  # the app imports queries.py from its own folder
     app_test = AppTest.from_file(str(APP), default_timeout=120).run()
     found = problems(app_test)
