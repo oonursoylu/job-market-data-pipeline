@@ -9,66 +9,68 @@ sources:
         description: Unique job postings loaded from the Adzuna API.
         loaded_at_field: loaded_at
         freshness:
+          # Collection runs on Monday, Wednesday and Friday, so the normal gap is up to 3 days.
           warn_after:
-            count: 24
-            period: hour
+            count: 4
+            period: day
           error_after:
-            count: 48
-            period: hour
+            count: 7
+            period: day
         columns:
           - name: source
             description: Source system for the job posting.
-            tests:
+            data_tests:
               - not_null
           - name: job_id
             description: Job identifier from the source system.
-            tests:
+            data_tests:
               - not_null
           - name: raw_json
             description: Full raw JSON payload from the source API.
-            tests:
+            data_tests:
               - not_null
           - name: loaded_at
             description: Timestamp when the job posting was loaded into PostgreSQL.
-            tests:
+            data_tests:
               - not_null
           - name: extract_date
             description: Date when the API extraction was executed.
-            tests:
+            data_tests:
               - not_null
 
       - name: job_posting_observations
         description: Country, role, and date level sightings of job postings.
         loaded_at_field: observed_at
         freshness:
+          # Collection runs on Monday, Wednesday and Friday, so the normal gap is up to 3 days.
           warn_after:
-            count: 24
-            period: hour
+            count: 4
+            period: day
           error_after:
-            count: 48
-            period: hour
+            count: 7
+            period: day
         columns:
           - name: source
             description: Source system for the job posting observation.
-            tests:
+            data_tests:
               - not_null
           - name: job_id
             description: Job identifier from the source system.
-            tests:
+            data_tests:
               - not_null
           - name: search_country
             description: Country code used in the search request.
-            tests:
+            data_tests:
               - not_null
           - name: search_role
             description: Role keyword group used in the search request.
-            tests:
+            data_tests:
               - not_null
           - name: extract_date
             description: Date when the API extraction was executed.
-            tests:
+            data_tests:
               - not_null
           - name: observed_at
             description: Timestamp when the observation was loaded into PostgreSQL.
-            tests:
+            data_tests:
               - not_null

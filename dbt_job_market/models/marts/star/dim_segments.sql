@@ -1,28 +1,30 @@
 {{ config(materialized='table') }}
 
--- Display names and sort order live here, so the dashboard and BI tools share them.
+-- Display names, sort order and collection start dates come from the
+-- search_countries and search_roles seeds, which the Python extractor also reads.
 -- is_reporting_segment can hide a role that is collected but not ready to report.
 with countries as (
 
-    select *
-    from (
-        values
-            ('de', 'Germany', 1),
-            ('gb', 'United Kingdom', 2)
-    ) as country_values (search_country, country_name, country_sort_order)
+    select
+        search_country,
+        country_name,
+        country_sort_order,
+        collection_start_date
+
+    from {{ ref('search_countries') }}
 
 ),
 
 roles as (
 
-    select *
-    from (
-        values
-            ('data_engineer', 'Data Engineer', 1, true),
-            ('analytics_engineer', 'Analytics Engineer', 2, true),
-            ('ai_engineer', 'AI Engineer', 3, true),
-            ('data_analyst', 'Data Analyst', 4, true)
-    ) as role_values (search_role, role_name, role_sort_order, is_reporting_segment)
+    select
+        search_role,
+        role_name,
+        role_sort_order,
+        is_reporting_segment,
+        collection_start_date
+
+    from {{ ref('search_roles') }}
 
 )
 
@@ -38,7 +40,8 @@ select
     row_number() over (
         order by countries.country_sort_order, roles.role_sort_order
     ) as segment_sort_order,
-    roles.is_reporting_segment
+    roles.is_reporting_segment,
+    greatest(countries.collection_start_date, roles.collection_start_date) as collection_start_date
 
 from countries
 cross join roles

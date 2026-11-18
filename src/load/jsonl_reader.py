@@ -15,9 +15,9 @@ def read_jsonl(file_path: str | Path) -> list[dict]:
 
 
 if __name__ == "__main__":
-    sample_path = Path(
-        "data/raw/adzuna/country=de/search_role=data_engineer/date=2026-06-03/jobs.jsonl"
-    )
+    from src.config import RAW_DATA_DIR
+
+    sample_path = RAW_DATA_DIR / "country=de" / "search_role=data_engineer" / "date=2026-06-03" / "jobs.jsonl"
 
     jobs = read_jsonl(sample_path)
 

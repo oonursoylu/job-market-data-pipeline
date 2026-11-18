@@ -6,12 +6,12 @@ models:
     columns:
       - name: source
         description: Source system for the job posting.
-        tests:
+        data_tests:
           - not_null
 
       - name: job_id
         description: Job identifier from the source system.
-        tests:
+        data_tests:
           - not_null
           - unique
 
@@ -20,12 +20,12 @@ models:
 
       - name: company_name
         description: Company name from the posting, displayed as Unknown when the source value is missing.
-        tests:
+        data_tests:
           - not_null
 
       - name: company_name_was_missing
         description: True when the source did not provide a usable company name.
-        tests:
+        data_tests:
           - not_null
 
       - name: source_company_name
@@ -35,8 +35,8 @@ models:
         description: Display location from the posting.
 
       - name: is_training_or_placement
-        description: Conservative title-based flag for trainee, apprenticeship, internship, placement programme, career-switch or no-experience adverts.
-        tests:
+        description: Conservative title-based flag for trainee, apprenticeship, internship, working student, thesis, placement programme, career-switch or no-experience adverts, including German terms such as Werkstudent, Praktikum, Ausbildung and duales Studium.
+        data_tests:
           - not_null
 
       - name: description
@@ -47,12 +47,12 @@ models:
 
       - name: description_is_source_snippet
         description: True when the source contract provides a description snippet rather than guaranteed full advert text.
-        tests:
+        data_tests:
           - not_null
 
       - name: description_is_likely_truncated
         description: True when the Adzuna description reaches the observed 500-character snippet boundary.
-        tests:
+        data_tests:
           - not_null
 
       - name: source_salary_min
@@ -69,17 +69,17 @@ models:
 
       - name: salary_is_available
         description: True when at least one positive salary bound is available.
-        tests:
+        data_tests:
           - not_null
 
       - name: salary_range_is_complete
         description: True when both positive salary bounds are available.
-        tests:
+        data_tests:
           - not_null
 
       - name: currency
         description: ISO currency code for postings with usable salary data, supplied by the source or inferred from the search country.
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values:
@@ -90,8 +90,8 @@ models:
         description: Currency value supplied directly by the source, when available.
 
       - name: salary_currency_was_inferred
-        description: True when currency was inferred as EUR for Germany or GBP for the United Kingdom.
-        tests:
+        description: "True when currency was inferred from the search country, using salary_currency in the search_countries seed (EUR for Germany, GBP for the United Kingdom)."
+        data_tests:
           - not_null
 
       - name: salary_is_predicted
@@ -99,32 +99,28 @@ models:
 
       - name: search_country
         description: Country code used in the search request.
-        tests:
+        data_tests:
           - not_null
-          - accepted_values:
+          - relationships:
               arguments:
-                values:
-                  - de
-                  - gb
+                to: ref('search_countries')
+                field: search_country
 
       - name: search_role
         description: Role keyword group used in the search request.
-        tests:
+        data_tests:
           - not_null
-          - accepted_values:
+          - relationships:
               arguments:
-                values:
-                  - data_engineer
-                  - analytics_engineer
-                  - ai_engineer
-                  - data_analyst
+                to: ref('search_roles')
+                field: search_role
 
       - name: extract_date
         description: Date when the API extraction was executed.
-        tests:
+        data_tests:
           - not_null
 
       - name: loaded_at
         description: Timestamp when the job posting was loaded into PostgreSQL.
-        tests:
+        data_tests:
           - not_null

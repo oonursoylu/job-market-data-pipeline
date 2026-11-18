@@ -23,12 +23,9 @@ CREATE TABLE IF NOT EXISTS raw.job_postings (
     raw_json JSONB NOT NULL,
     loaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     extract_date DATE NOT NULL,
-    CONSTRAINT uq_job_postings_source_job_id UNIQUE (source, job_id),
-    CONSTRAINT chk_job_postings_salary_range CHECK (
-        salary_min IS NULL
-        OR salary_max IS NULL
-        OR salary_min <= salary_max
-    )
+    -- No salary range CHECK here: raw rows arrive unchanged, and the dbt test
+    -- assert_source_salary_range_valid warns about a minimum above the maximum.
+    CONSTRAINT uq_job_postings_source_job_id UNIQUE (source, job_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_job_postings_extract_date
@@ -68,5 +65,4 @@ ON raw.job_posting_observations (extract_date);
 CREATE INDEX IF NOT EXISTS idx_job_posting_observations_search_country_role
 ON raw.job_posting_observations (search_country, search_role);
 
-CREATE INDEX IF NOT EXISTS idx_job_posting_observations_source_job_id
-ON raw.job_posting_observations (source, job_id);
+-- Lookups by (source, job_id) use the unique constraint's index, which starts with those columns.

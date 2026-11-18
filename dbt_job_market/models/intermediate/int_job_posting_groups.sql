@@ -33,16 +33,14 @@ normalized as (
         posted_date,
         extract_date,
 
-        trim(regexp_replace(lower(coalesce(company_name, '')), '[^a-z0-9]+', ' ', 'g')) as normalized_company_name,
+        {{ normalize_text("coalesce(company_name, '')") }} as normalized_company_name,
         case
             when company_name_was_missing then 'missing-company:' || job_id
-            else trim(regexp_replace(lower(company_name), '[^a-z0-9]+', ' ', 'g'))
+            else {{ normalize_text('company_name') }}
         end as company_group_key,
-        trim(regexp_replace(lower(coalesce(job_title, '')), '[^a-z0-9]+', ' ', 'g')) as normalized_job_title,
+        {{ normalize_text("coalesce(job_title, '')") }} as normalized_job_title,
 
-        md5(
-            trim(regexp_replace(lower(coalesce(description, '')), '[^a-z0-9]+', ' ', 'g'))
-        ) as description_hash
+        md5({{ normalize_text("coalesce(description, '')") }}) as description_hash
 
     from job_postings
 

@@ -31,6 +31,10 @@ models:
         description: "False for segments that are collected but not reported yet."
         data_tests:
           - not_null
+      - name: collection_start_date
+        description: "First date the segment was collected: the later of its country and role start dates."
+        data_tests:
+          - not_null
 
   - name: dim_skills
     description: "Tracked skills with display labels, categories and the aliases used for matching."
@@ -104,7 +108,9 @@ models:
       One row per observation: a posting seen in one country and role search on one date.
       Source postings are counted as distinct job_posting_key and analytical groups as distinct posting_group_id.
       A skill share over a period is the sum, over included dates, of groups with a mention divided by the sum of observed groups.
-      A date is included only when every selected segment has observations on it; uncollected dates are never counted as zero.
+      Because a group counts once per date across the selected roles, that sum equals the distinct count of group_day_key.
+      A date is included only when every selected segment has observations on it (see fct_segment_coverage);
+      uncollected dates are never counted as zero.
     columns:
       - name: observation_id
         description: "Observation key from the staging model."
@@ -135,10 +141,18 @@ models:
               arguments:
                 to: ref('dim_posting_groups')
                 field: posting_group_id
-      - name: extract_date
-        description: "Date the batch pipeline observed the posting."
+      - name: group_day_key
+        description: "posting_group_id and extract_date joined with a pipe. A distinct count over the selected rows gives group-days."
         data_tests:
           - not_null
+      - name: extract_date
+        description: "Date the batch pipeline observed the posting; key to dim_date."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
       - name: posting_age_days
         description: "Days between the source posting date and the observation date, floored at zero. A quality signal, not proof of closure."
       - name: is_stale_at_observation
@@ -170,3 +184,63 @@ models:
               arguments:
                 to: ref('dim_skills')
                 field: skill
+
+  - name: fct_segment_coverage
+    description: >
+      One row per segment and date with observations, with the postings and groups observed.
+      Use it to find the dates on which every selected segment was collected. It is not linked
+      to skills, so skill filters do not change which dates are included.
+    columns:
+      - name: segment_date_id
+        description: "segment_id and extract_date joined with a pipe."
+        data_tests:
+          - not_null
+          - unique
+      - name: segment_id
+        description: "Key to dim_segments."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_segments')
+                field: segment_id
+      - name: extract_date
+        description: "Observation date; key to dim_date."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: observed_postings
+        description: "Distinct source postings observed in the segment on the date."
+        data_tests:
+          - not_null
+      - name: observed_groups
+        description: "Distinct analytical groups observed in the segment on the date."
+        data_tests:
+          - not_null
+
+  - name: dim_date
+    description: >
+      Calendar with one row per day for every full year that has observations, for use as a
+      marked date table in BI tools. is_collection_date is false on days without collection;
+      those days are missing data, not zero demand.
+    columns:
+      - name: date_day
+        description: "Calendar date."
+        data_tests:
+          - not_null
+          - unique
+      - name: month_label
+        description: "Short month and year, for example Nov 2026. Sort by year_month_number."
+      - name: year_month_number
+        description: "Year times 100 plus month, the sort column for month_label."
+      - name: is_collection_date
+        description: "True when at least one segment was collected on the day."
+        data_tests:
+          - not_null
+      - name: collected_segments
+        description: "Number of country and role segments with observations on the day."
+        data_tests:
+          - not_null

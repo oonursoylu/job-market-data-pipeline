@@ -5,6 +5,16 @@ with source as (
 
 ),
 
+countries as (
+
+    select
+        search_country,
+        salary_currency
+
+    from {{ ref('search_countries') }}
+
+),
+
 cleaned as (
 
     select
@@ -24,13 +34,16 @@ cleaned as (
         nullif(trim(redirect_url), '') as redirect_url,
         created_at,
         created_at::date as posted_date,
-        search_role,
-        search_country,
+        source.search_role,
+        source.search_country,
+        countries.salary_currency as country_salary_currency,
         raw_json,
         loaded_at,
         extract_date
 
     from source
+    left join countries
+        on source.search_country = countries.search_country
 
 ),
 
@@ -44,8 +57,19 @@ prepared as (
         source_company_name is null as company_name_was_missing,
         location,
         country,
+        -- English and German training-style titles: Werkstudent, Praktikum, Ausbildung,
+        -- duales Studium and thesis adverts are flagged, not removed.
         coalesce(
-            lower(job_title) ~ '(^|[^a-z])(trainee|apprentice|apprenticeship|intern|internship)([^a-z]|$)'
+            lower(job_title) ~ (
+                '(^|[^a-zäöüß])('
+                || 'trainees?|apprentices?|apprenticeships?|interns?|internships?|working students?'
+                || '|werkstudent(in|innen|en)?|werkstudierende[rn]?'
+                || '|(pflicht)?praktikum|praktikant(in|innen|en)?'
+                || '|ausbildung|azubis?|auszubildende[rn]?'
+                || '|duales studium|duale[rnms]? student(in|innen|en)?'
+                || '|abschlussarbeit(en)?|masterarbeit|bachelorarbeit|thesis'
+                || ')([^a-zäöüß]|$)'
+            )
             or lower(job_title) like '%placement programme%'
             or lower(job_title) like '%career switch%'
             or lower(job_title) like '%no experience needed%',
@@ -66,19 +90,14 @@ prepared as (
             and coalesce(source_salary_max > 0, false) as salary_range_is_complete,
         case
             when coalesce(source_salary_min > 0, false)
-                or coalesce(source_salary_max > 0, false) then coalesce(
-                source_currency,
-                case search_country
-                    when 'de' then 'EUR'
-                    when 'gb' then 'GBP'
-                end
-            )
+                or coalesce(source_salary_max > 0, false)
+                then coalesce(source_currency, country_salary_currency)
         end as currency,
         source_currency,
         (coalesce(source_salary_min > 0, false)
             or coalesce(source_salary_max > 0, false))
             and source_currency is null
-            and search_country in ('de', 'gb')
+            and country_salary_currency is not null
             as salary_currency_was_inferred,
         case raw_json ->> 'salary_is_predicted'
             when '1' then true

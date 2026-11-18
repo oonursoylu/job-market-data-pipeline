@@ -30,6 +30,65 @@ seeds:
                   - mlops
 
       - name: pattern
-        description: "Pipe-separated normalised phrase alternatives. Matching uses word boundaries; each posting counts once per skill."
+        description: "Pipe-separated phrase alternatives in normalised form (lower case, letters, digits, German umlauts and single spaces). Matching uses word boundaries; each posting counts once per skill. assert_skill_aliases_are_normalized checks the form."
+        data_tests:
+          - not_null
+
+  - name: search_countries
+    description: "Countries the pipeline searches. The Python extractor and loader read this file too, so adding a row adds a country everywhere."
+    columns:
+      - name: search_country
+        description: "Adzuna country code used in the API path."
+        data_tests:
+          - not_null
+          - unique
+      - name: country_name
+        description: "Display name."
+        data_tests:
+          - not_null
+          - unique
+      - name: country_sort_order
+        description: "Display order."
+        data_tests:
+          - not_null
+          - unique
+      - name: salary_currency
+        description: "Currency assumed for salaries that arrive without one."
+        data_tests:
+          - not_null
+      - name: collection_start_date
+        description: "First date this country was collected. The loader expects archives from this date on."
+        data_tests:
+          - not_null
+
+  - name: search_roles
+    description: "Search roles and the keyword sent to the API. The Python extractor and loader read this file too."
+    columns:
+      - name: search_role
+        description: "Role code used in archive paths and models."
+        data_tests:
+          - not_null
+          - unique
+      - name: search_term
+        description: "Keyword sent to the API as the 'what' parameter."
+        data_tests:
+          - not_null
+          - unique
+      - name: role_name
+        description: "Display name."
+        data_tests:
+          - not_null
+          - unique
+      - name: role_sort_order
+        description: "Display order."
+        data_tests:
+          - not_null
+          - unique
+      - name: is_reporting_segment
+        description: "False for a role that is collected but not reported yet."
+        data_tests:
+          - not_null
+      - name: collection_start_date
+        description: "First date this role was collected. The loader expects archives from this date on."
         data_tests:
           - not_null

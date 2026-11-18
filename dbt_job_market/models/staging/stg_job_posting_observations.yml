@@ -6,18 +6,18 @@ models:
     columns:
       - name: observation_id
         description: Deterministic identifier generated from source, job_id, search_country, search_role, and extract_date.
-        tests:
+        data_tests:
           - not_null
           - unique
 
       - name: source
         description: Source system for the job posting observation.
-        tests:
+        data_tests:
           - not_null
 
       - name: job_id
         description: Job identifier from the source system.
-        tests:
+        data_tests:
           - not_null
           - relationships:
               arguments:
@@ -26,32 +26,28 @@ models:
 
       - name: search_country
         description: Country code used in the search request.
-        tests:
+        data_tests:
           - not_null
-          - accepted_values:
+          - relationships:
               arguments:
-                values:
-                  - de
-                  - gb
+                to: ref('search_countries')
+                field: search_country
 
       - name: search_role
         description: Role keyword group used in the search request.
-        tests:
+        data_tests:
           - not_null
-          - accepted_values:
+          - relationships:
               arguments:
-                values:
-                  - data_engineer
-                  - analytics_engineer
-                  - ai_engineer
-                  - data_analyst
+                to: ref('search_roles')
+                field: search_role
 
       - name: extract_date
         description: Date when the API extraction was executed.
-        tests:
+        data_tests:
           - not_null
 
       - name: observed_at
         description: Timestamp when the observation was loaded into PostgreSQL.
-        tests:
+        data_tests:
           - not_null

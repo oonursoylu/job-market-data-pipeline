@@ -24,7 +24,7 @@ terraform,devops,terraform
 tableau,bi,tableau
 power bi,bi,power bi|powerbi
 looker,bi,looker
-machine learning,ai,machine learning
+machine learning,ai,machine learning|maschinelles lernen|maschinellen lernens|maschinellem lernen
 tensorflow,ai,tensorflow
 pytorch,ai,pytorch
 mlflow,mlops,mlflow
@@ -44,11 +44,11 @@ ci/cd,devops,ci cd|cicd|continuous integration|continuous delivery
 pandas,programming,pandas
 numpy,programming,numpy
 scikit-learn,ai,scikit learn|sklearn
-a/b testing,ai,a b testing|a b test|ab testing|split testing
+a/b testing,ai,a b testing|a b test|a b tests|ab testing|split testing
 experimentation,ai,experimentation|experimental design|design of experiments
-statistics,ai,statistics|statistical analysis|hypothesis testing
-forecasting,ai,forecasting|time series
-data modelling,transformation,data modelling|data modeling|dimensional modelling|dimensional modeling
-data quality,transformation,data quality
+statistics,ai,statistics|statistical analysis|hypothesis testing|statistik|statistische analyse|statistischen analysen
+forecasting,ai,forecasting|time series|zeitreihen|zeitreihenanalyse
+data modelling,transformation,data modelling|data modeling|dimensional modelling|dimensional modeling|datenmodellierung
+data quality,transformation,data quality|datenqualität
 etl/elt,transformation,etl|elt
 llm,ai,llm|llms|large language model|large language models

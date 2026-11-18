@@ -6,17 +6,17 @@ models:
     columns:
       - name: posting_group_id
         description: "Analytical group identifier for postings that likely represent the same real-world job opportunity."
-        tests:
+        data_tests:
           - not_null
 
       - name: source
         description: "Source system for the job posting."
-        tests:
+        data_tests:
           - not_null
 
       - name: job_id
         description: "Job identifier from the source system. This remains the raw source grain."
-        tests:
+        data_tests:
           - not_null
           - unique
           - relationships:
@@ -26,32 +26,28 @@ models:
 
       - name: search_country
         description: "Country code used in the search request."
-        tests:
+        data_tests:
           - not_null
-          - accepted_values:
+          - relationships:
               arguments:
-                values:
-                  - de
-                  - gb
+                to: ref('search_countries')
+                field: search_country
 
       - name: search_role
         description: "Role keyword group used in the search request."
-        tests:
+        data_tests:
           - not_null
-          - accepted_values:
+          - relationships:
               arguments:
-                values:
-                  - data_engineer
-                  - analytics_engineer
-                  - ai_engineer
-                  - data_analyst
+                to: ref('search_roles')
+                field: search_role
 
       - name: normalized_company_name
         description: "Lowercased and cleaned company name used for analytical grouping."
 
       - name: company_name_was_missing
         description: "True when the source company was missing. Such records receive a job-specific grouping key to avoid false merges."
-        tests:
+        data_tests:
           - not_null
 
       - name: normalized_job_title
@@ -62,5 +58,5 @@ models:
 
       - name: extract_date
         description: "Date when the posting first entered the raw job catalog."
-        tests:
+        data_tests:
           - not_null

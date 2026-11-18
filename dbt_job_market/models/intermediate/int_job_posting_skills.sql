@@ -11,12 +11,7 @@ with job_postings as materialized (
         search_role,
         posted_date,
         extract_date,
-        ' ' || regexp_replace(
-            lower(concat_ws(' ', job_title, description)),
-            '[^a-z0-9]+',
-            ' ',
-            'g'
-        ) || ' ' as normalized_search_text
+        ' ' || {{ normalize_text("concat_ws(' ', job_title, description)") }} || ' ' as normalized_search_text
 
     from {{ ref('stg_job_postings') }}
     where job_title is not null or description is not null

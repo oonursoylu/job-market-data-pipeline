@@ -58,36 +58,26 @@ observations as (
 
 observation_summary as (
 
+    -- One pass over the observations gives the first and latest dates, the number
+    -- of observed dates and the search context of the latest observation. The
+    -- array order is the tie-break the model has always used: latest date, then
+    -- latest load time, then country and role.
     select
         source,
         job_id,
         min(extract_date) as first_observed_date,
         max(extract_date) as latest_extract_date,
-        count(distinct extract_date) as times_observed
+        count(distinct extract_date) as times_observed,
+        (array_agg(search_country order by extract_date desc, observed_at desc, search_country, search_role))[1]
+            as search_country,
+        (array_agg(search_role order by extract_date desc, observed_at desc, search_country, search_role))[1]
+            as search_role
 
     from observations
 
     group by
         source,
         job_id
-
-),
-
-latest_observation as (
-
-    -- Keep the latest observation with the existing tie-break order.
-    select distinct on (source, job_id)
-        source,
-        job_id,
-        search_country,
-        search_role,
-        extract_date
-
-    from observations
-
-    order by
-        source, job_id,
-        extract_date desc, observed_at desc, search_country, search_role
 
 ),
 
@@ -103,8 +93,8 @@ latest_postings as (
         job_postings.company_name_was_missing,
         job_postings.location,
         job_postings.country,
-        latest_observation.search_country,
-        latest_observation.search_role,
+        observation_summary.search_country,
+        observation_summary.search_role,
         posting_groups.normalized_company_name,
         posting_groups.normalized_job_title,
         job_postings.posted_date,
@@ -137,10 +127,6 @@ latest_postings as (
     inner join observation_summary
         on job_postings.source = observation_summary.source
         and job_postings.job_id = observation_summary.job_id
-
-    inner join latest_observation
-        on job_postings.source = latest_observation.source
-        and job_postings.job_id = latest_observation.job_id
 
     left join posting_groups
         on job_postings.source = posting_groups.source

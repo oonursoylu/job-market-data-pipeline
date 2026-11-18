@@ -1,7 +1,8 @@
 {{ config(materialized='table') }}
 
 -- One row per observation: a posting seen in a country and role search on a date.
--- Counting rules are applied by the consumers on this grain.
+-- Counting rules are applied by the consumers on this grain. group_day_key lets a
+-- BI tool count group-days with a single distinct count.
 with observations as (
 
     select
@@ -43,6 +44,7 @@ select
     md5(observations.source || '|' || observations.job_id) as job_posting_key,
     observations.search_country || '|' || observations.search_role as segment_id,
     posting_groups.posting_group_id,
+    posting_groups.posting_group_id || '|' || observations.extract_date::text as group_day_key,
     observations.source,
     observations.job_id,
     observations.search_country,

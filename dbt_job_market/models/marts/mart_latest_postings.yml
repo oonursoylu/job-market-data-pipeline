@@ -6,18 +6,18 @@ models:
     columns:
       - name: latest_posting_id
         description: "Deterministic identifier for the latest posting mart grain."
-        tests:
+        data_tests:
           - not_null
           - unique
 
       - name: source
         description: "Source system for the job posting."
-        tests:
+        data_tests:
           - not_null
 
       - name: job_id
         description: "Job identifier from the source system. This remains the raw source grain."
-        tests:
+        data_tests:
           - not_null
           - unique
           - relationships:
@@ -27,22 +27,22 @@ models:
 
       - name: posting_group_id
         description: "Analytical group identifier for postings that likely represent the same real-world job opportunity across multiple source job IDs or locations."
-        tests:
+        data_tests:
           - not_null
 
       - name: job_title
         description: "Job title from the posting."
-        tests:
+        data_tests:
           - not_null
 
       - name: company_name
         description: "Company name from the posting, displayed as Unknown when the source value is missing."
-        tests:
+        data_tests:
           - not_null
 
       - name: company_name_was_missing
         description: "True when the source did not provide a usable company name."
-        tests:
+        data_tests:
           - not_null
 
       - name: location
@@ -53,25 +53,21 @@ models:
 
       - name: search_country
         description: "Country code from the latest observed search context."
-        tests:
+        data_tests:
           - not_null
-          - accepted_values:
+          - relationships:
               arguments:
-                values:
-                  - de
-                  - gb
+                to: ref('search_countries')
+                field: search_country
 
       - name: search_role
         description: "Role keyword group from the latest observed search context."
-        tests:
+        data_tests:
           - not_null
-          - accepted_values:
+          - relationships:
               arguments:
-                values:
-                  - data_engineer
-                  - analytics_engineer
-                  - ai_engineer
-                  - data_analyst
+                to: ref('search_roles')
+                field: search_role
 
       - name: normalized_company_name
         description: "Lowercased and cleaned company name used for analytical grouping."
@@ -87,12 +83,12 @@ models:
 
       - name: is_stale_at_latest_observation
         description: "True when the source posting date was more than 90 days before its latest observation."
-        tests:
+        data_tests:
           - not_null
 
       - name: is_training_or_placement
-        description: "Conservative title-based flag for trainee, apprenticeship, internship, placement programme, career-switch or no-experience adverts."
-        tests:
+        description: "Conservative title-based flag for trainee, apprenticeship, internship, working student, thesis, placement programme, career-switch or no-experience adverts, including German terms such as Werkstudent, Praktikum, Ausbildung and duales Studium."
+        data_tests:
           - not_null
 
       - name: description_length
@@ -100,12 +96,12 @@ models:
 
       - name: description_is_source_snippet
         description: "True when the source does not guarantee full advert text."
-        tests:
+        data_tests:
           - not_null
 
       - name: description_is_likely_truncated
         description: "True when the source description reaches the observed 500-character snippet boundary."
-        tests:
+        data_tests:
           - not_null
 
       - name: salary_min
@@ -116,12 +112,12 @@ models:
 
       - name: salary_is_available
         description: "True when at least one positive salary bound is available."
-        tests:
+        data_tests:
           - not_null
 
       - name: salary_range_is_complete
         description: "True when both positive salary bounds are available."
-        tests:
+        data_tests:
           - not_null
 
       - name: currency
@@ -129,7 +125,7 @@ models:
 
       - name: salary_currency_was_inferred
         description: "True when the salary currency was inferred from the search country."
-        tests:
+        data_tests:
           - not_null
 
       - name: salary_is_predicted
@@ -140,17 +136,17 @@ models:
 
       - name: first_observed_date
         description: "First extraction date when this job posting was observed."
-        tests:
+        data_tests:
           - not_null
 
       - name: latest_extract_date
         description: "Most recent extraction date when this job posting was observed."
-        tests:
+        data_tests:
           - not_null
 
       - name: times_observed
         description: "Number of extraction dates where this job posting was observed."
-        tests:
+        data_tests:
           - not_null
 
       - name: redirect_url

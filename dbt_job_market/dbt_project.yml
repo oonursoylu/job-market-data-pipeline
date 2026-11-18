@@ -14,7 +14,25 @@ clean-targets:
   - "dbt_packages"
 
 # Staging models are views. Intermediate and mart models set materialized='table' in their own files.
+# Each table is analysed right after it is built, so the next model in the same run is planned
+# with real row counts instead of guesses.
 models:
   dbt_job_market:
     staging:
       +materialized: view
+    intermediate:
+      +post-hook: "analyze {{ this }}"
+    marts:
+      +post-hook: "analyze {{ this }}"
+
+seeds:
+  dbt_job_market:
+    search_countries:
+      +column_types:
+        country_sort_order: integer
+        collection_start_date: date
+    search_roles:
+      +column_types:
+        role_sort_order: integer
+        is_reporting_segment: boolean
+        collection_start_date: date

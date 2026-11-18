@@ -6,13 +6,13 @@ models:
     columns:
       - name: job_skill_id
         description: "Deterministic identifier for a job posting and matched skill."
-        tests:
+        data_tests:
           - not_null
           - unique
 
       - name: job_id
         description: "Job identifier from the source system."
-        tests:
+        data_tests:
           - not_null
           - relationships:
               arguments:
@@ -21,7 +21,7 @@ models:
 
       - name: skill
         description: "Matched normalized skill name."
-        tests:
+        data_tests:
           - not_null
           - relationships:
               arguments:
@@ -30,5 +30,5 @@ models:
 
       - name: category
         description: "Skill category from the controlled dictionary."
-        tests:
+        data_tests:
           - not_null

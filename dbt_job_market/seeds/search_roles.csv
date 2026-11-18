@@ -1,0 +1,5 @@
+search_role,search_term,role_name,role_sort_order,is_reporting_segment,collection_start_date
+data_engineer,data engineer,Data Engineer,1,true,2026-06-03
+analytics_engineer,analytics engineer,Analytics Engineer,2,true,2026-06-04
+ai_engineer,ai engineer,AI Engineer,3,true,2026-06-04
+data_analyst,data analyst,Data Analyst,4,true,2026-09-06

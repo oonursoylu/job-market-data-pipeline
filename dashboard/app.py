@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -7,6 +9,7 @@ import queries
 
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 PLOTLY_CONFIG = {
     "displayModeBar": False,
     "displaylogo": False,
@@ -67,13 +70,17 @@ def load(loader, *args):
     try:
         return loader(*args)
     except Exception:
-        st.error("Could not load data. Check that PostgreSQL is running and the dbt models are available.")
+        # Keep the details in the terminal log; the page shows a short message.
+        logger.exception("Dashboard query failed in %s", getattr(loader, "__name__", loader))
+        st.error("Could not load data. Check that PostgreSQL is running and the dbt models are available. "
+                 "Details are in the terminal where Streamlit runs.")
         st.stop()
 
 
 st.set_page_config(page_title="Job Market Explorer", page_icon="📊", layout="wide")
 st.title("Job Market Explorer")
-st.caption("Explore collected job adverts, skill mentions and repeated posting groups.")
+st.caption("Explore collected job adverts, skill mentions and repeated posting groups. "
+           "Job data: [Adzuna](https://www.adzuna.co.uk).")
 segments = load(load_segments)
 country_names = dict(segments[["search_country", "country_name"]].drop_duplicates().itertuples(index=False, name=None))
 role_names = dict(segments[["search_role", "role_name"]].drop_duplicates().itertuples(index=False, name=None))
