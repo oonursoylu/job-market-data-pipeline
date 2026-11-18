@@ -3,7 +3,7 @@ import hashlib
 import json
 import os
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from src.config import (
@@ -15,6 +15,7 @@ from src.config import (
     RESULTS_PER_PAGE,
     ROLE_CODES,
     SEARCH_TERMS,
+    STALE_IN_PROGRESS_AFTER,
     archive_path,
     expected_segments,
     status_path,
@@ -30,17 +31,36 @@ def read_status(path: Path) -> dict | None:
         return None
 
 
+def status_age(status: dict | None, status_file: Path) -> timedelta:
+    """Time since the attempt started, from the status file, or from the file's own time."""
+    try:
+        started = datetime.fromisoformat(status["started_at"])
+    except (TypeError, KeyError, ValueError):
+        started = datetime.fromtimestamp(status_file.stat().st_mtime, timezone.utc)
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - started
+
+
 def segment_state(country: str, role: str, extract_date: date) -> str:
-    """Return 'new', 'complete', 'failed' (safe to retry) or 'blocked' (needs review)."""
+    """Return 'new', 'complete', 'failed' or 'stale' (both safe to retry), or 'blocked' (needs review).
+
+    'stale' is an attempt left "in_progress" for longer than STALE_IN_PROGRESS_AFTER, for
+    example because the laptop shut down during extraction. A recent "in_progress" may still
+    be running, so it stays 'blocked'.
+    """
     archive = archive_path(country, role, extract_date)
     status_file = status_path(country, role, extract_date)
     if not archive.exists() and not status_file.exists():
         return "new"
     status = read_status(status_file) if status_file.exists() else None
-    if archive.exists() and (not status_file.exists() or (status or {}).get("status") == "complete"):
+    state = (status or {}).get("status")
+    if archive.exists() and (not status_file.exists() or state == "complete"):
         return "complete"
-    if not archive.exists() and (status or {}).get("status") == "failed":
+    if not archive.exists() and state == "failed":
         return "failed"
+    if not archive.exists() and state == "in_progress" and status_age(status, status_file) > STALE_IN_PROGRESS_AFTER:
+        return "stale"
     return "blocked"
 
 
@@ -49,7 +69,7 @@ def plan_segments(extract_date: date, countries, roles, resume: bool) -> list[tu
     to_run, blocked = [], []
     for country, role in expected_segments(extract_date, countries, roles):
         state = segment_state(country, role, extract_date)
-        if state == "new" or (resume and state == "failed"):
+        if state == "new" or (resume and state in ("failed", "stale")):
             to_run.append((country, role))
         elif resume and state == "complete":
             print(f"Already complete, skipping: {country}/{role}")
@@ -62,12 +82,12 @@ def plan_segments(extract_date: date, countries, roles, resume: bool) -> list[tu
     return to_run
 
 
-def set_aside_failed_status(country: str, role: str, extract_date: date) -> None:
-    """Keep the failed status for the record and free the name for a new attempt."""
+def set_aside_status(country: str, role: str, extract_date: date, label: str) -> None:
+    """Keep an unfinished attempt's status for the record and free the name for a new attempt."""
     status_file = status_path(country, role, extract_date)
     if status_file.exists():
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        status_file.rename(status_file.with_name(f"extraction_status.failed-{stamp}.json"))
+        status_file.rename(status_file.with_name(f"extraction_status.{label}-{stamp}.json"))
 
 
 def run_extract(
@@ -160,8 +180,10 @@ def extract_all(extract_date: date, countries=None, roles=None, resume: bool = F
     total = 0
     for country, role in segments:
         print(f"\nStarting extract for country: {country}, role: {role}")
-        if resume:
-            set_aside_failed_status(country, role, extract_date)
+        state = segment_state(country, role, extract_date)
+        if state in ("failed", "stale"):
+            print(f"Retrying: the previous attempt is {state}; its status file is kept with a '{state}-' name.")
+            set_aside_status(country, role, extract_date, state)
         total += run_extract(session, credentials, country, role, extract_date)
     return total
 
@@ -173,7 +195,7 @@ def main(argv=None) -> None:
     parser.add_argument("--countries", nargs="+", choices=COUNTRY_CODES, default=COUNTRY_CODES,
                         help="Countries to collect (default: all).")
     parser.add_argument("--resume", action="store_true",
-                        help="Skip segments already complete today and retry failed ones.")
+                        help="Skip segments already complete today and retry failed or stale ones.")
     args = parser.parse_args(argv)
     extract_all(date.today(), list(dict.fromkeys(args.countries)), list(dict.fromkeys(args.roles)), args.resume)
 

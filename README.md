@@ -62,7 +62,9 @@ The dashboard reads only the star schema. Its queries in [dashboard/queries.py](
 
 The run collects today's searches, validates and loads them, checks source freshness and runs `dbt build`. Everything it prints is appended to `logs/pipeline_YYYY-MM-DD.log`, and a failure gives a non-zero exit code, which Task Scheduler shows as the last result. The second run on the same day finishes anything the first one could not; when the day is already complete it only reruns dbt. If the laptop is off at both times, the task runs as soon as it is back on.
 
-Running it twice on the same day is safe. Complete segments are skipped. A segment that failed has its status file renamed to `extraction_status.failed-<time>.json`, kept as a record, and is collected again. A segment left `in_progress` stops the run for a manual look, because another run may still be writing it. The load ignores rows it already has. Retries with growing waits handle API rate limits and server errors, and error messages never include the request URL, which carries the API key.
+Running it twice on the same day is safe. Complete segments are skipped. A segment that failed has its status file renamed to `extraction_status.failed-<time>.json`, kept as a record, and is collected again. A segment left `in_progress` for more than an hour, for example because the laptop shut down during extraction, is handled the same way under a `stale-` name: the task is stopped after one hour and never runs twice at once, so that attempt cannot still be running. A more recent `in_progress` stops the run for a manual look. The load ignores rows it already has. Retries with growing waits handle API rate limits and server errors, and error messages never include the request URL, which carries the API key.
+
+Before loading the run date, each run also loads any day from the last 14 days whose archives are on disk but not fully in PostgreSQL, for example when the database was down during both runs of a day. A day with a missing or inconsistent archive is reported in the log and skipped, so it never blocks the current run. For a day with a missing archive, loading its other segments by hand with `--countries` and `--roles` stops the warning.
 
 I collect on Monday, Wednesday and Friday rather than every day. In the archives, collections one day apart shared 93% of their adverts and only 6% were new, so daily runs mostly saw the same adverts again. With a 2 to 3 day gap 68% were still there and 23% were new; with 4 to 7 days, 61% and 31%. The one-day figures come from only 19 segment pairs, all in June. Fixed weekdays also keep the dates evenly spaced, which matters more for trends than collecting often, and avoid weekend snapshots.
 
@@ -203,7 +205,7 @@ dbt build --project-dir .\dbt_job_market
 python -m streamlit run dashboard\app.py
 ```
 
-Python tests: `python -m pytest`. The three database tests run when `JOB_MARKET_TEST_DATABASE` names an empty test database.
+Python tests: `python -m pytest`. The four database tests run when `JOB_MARKET_TEST_DATABASE` names an empty test database.
 
 To compare the dashboard queries with the earlier pandas logic after a dbt build (this takes a few minutes):
 
@@ -218,7 +220,7 @@ python -m src.load.run_postgres_load --date 2026-09-06 --check-only
 python -m src.load.run_postgres_load --date 2026-09-06
 ```
 
-The loader expects the segments that were being collected on that date, using the start dates in the seeds, so a date before 6 September 2026 loads without Data Analyst automatically. Both scripts take `--roles` and `--countries` to work on fewer segments, and the extractor takes `--resume` to skip complete segments and retry failed ones.
+The loader expects the segments that were being collected on that date, using the start dates in the seeds, so a date before 6 September 2026 loads without Data Analyst automatically. Both scripts take `--roles` and `--countries` to work on fewer segments, and the extractor takes `--resume` to skip complete segments and retry failed or stale ones.
 
 Generate the dbt documentation with `dbt docs generate --project-dir .\dbt_job_market`. Raw-layer checks are in [sql/002_raw_data_quality_checks.sql](sql/002_raw_data_quality_checks.sql).
 

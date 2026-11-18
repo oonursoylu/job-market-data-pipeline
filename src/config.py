@@ -5,7 +5,7 @@ same list. To add a country or role, add one row to the matching seed file.
 """
 import csv
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 
@@ -19,6 +19,15 @@ LOG_DIR = PROJECT_ROOT / "logs"
 MAX_PAGES = 3
 RESULTS_PER_PAGE = 50
 REQUEST_PAUSE_SECONDS = 1.5
+
+# A segment left "in_progress" for longer than this cannot still be running: the scheduled
+# task is stopped after one hour and never runs twice at once (register_scheduled_task.ps1).
+# Such a segment is retried like a failed one.
+STALE_IN_PROGRESS_AFTER = timedelta(hours=1)
+
+# Each pipeline run also loads archived days from this many days back that are not fully
+# in PostgreSQL, for example after the database was down during both runs of a day.
+CATCH_UP_DAYS = 14
 
 # Adzuna's Search API returns a description snippet, not full advert text.
 DESCRIPTION_CONTRACT = "snippet"

@@ -6,8 +6,11 @@ Run from the repository root:
 
 Each step stops the run if it fails, so a bad extraction never reaches the
 database and a failed load never reaches dbt. Rerunning on the same day is
-safe: complete segments are skipped, failed ones are retried, the load
-ignores rows it already has, and dbt rebuilds the models.
+safe: complete segments are skipped, failed or stale ones are retried, the
+load ignores rows it already has, and dbt rebuilds the models.
+
+Before loading the run date, it also loads any day from the last 14 days whose
+archives are on disk but not fully in PostgreSQL (CATCH_UP_DAYS in config.py).
 
 Everything printed is also appended to logs/pipeline_YYYY-MM-DD.log.
 """
@@ -22,7 +25,7 @@ from datetime import date, datetime
 
 from src.config import DBT_PROJECT_DIR, LOG_DIR, PROJECT_ROOT
 from src.extract.run_adzuna_extract import extract_all
-from src.load.run_postgres_load import load_date, parse_date
+from src.load.run_postgres_load import catch_up, load_date, parse_date
 
 
 class Tee:
@@ -76,6 +79,8 @@ def run(run_date: date, skip_extract: bool, skip_dbt: bool) -> None:
         print(f"Fetched {extract_all(run_date, resume=True)} records.")
 
     step("2/3 Validate and load into PostgreSQL")
+    catch_up(run_date)
+    print(f"\nLoading {run_date}:")
     load_date(run_date)
 
     if skip_dbt:

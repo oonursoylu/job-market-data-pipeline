@@ -1,10 +1,11 @@
 import argparse
 import hashlib
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
-from src.config import COUNTRY_CODES, ROLE_CODES, archive_path, expected_segments, status_path
+from src import config
+from src.config import CATCH_UP_DAYS, COUNTRY_CODES, ROLE_CODES, archive_path, expected_segments, status_path
 from src.load.job_mapper import map_adzuna_job
 from src.load.jsonl_reader import read_jsonl
 from src.load.postgres_loader import get_connection, load_segment
@@ -125,6 +126,73 @@ def load_date(extract_date: date, countries=None, roles=None, check_only: bool =
         connection.close()
     print(f"\nLoad complete: {postings} new postings, {observations} new observations.")
     return postings, observations
+
+
+def loaded_segments(connection, since: date) -> set[tuple[date, str, str]]:
+    """Date, country and role combinations that already have observations in PostgreSQL."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT DISTINCT extract_date, search_country, search_role
+            FROM raw.job_posting_observations
+            WHERE extract_date >= %s
+            """,
+            (since,),
+        )
+        return set(cursor.fetchall())
+
+
+def dates_to_catch_up(run_date: date, loaded: set, lookback_days: int = CATCH_UP_DAYS) -> list[date]:
+    """Archived days before run_date, inside the look-back window, that are not fully loaded.
+
+    A segment is missing when its archive has records but PostgreSQL has no observation for it
+    on that date. An empty archive has nothing to load, so it never counts as missing.
+    """
+    since = run_date - timedelta(days=lookback_days)
+    days = set()
+    for folder in config.RAW_DATA_DIR.glob("country=*/search_role=*/date=*"):
+        try:
+            day = date.fromisoformat(folder.name.split("=", 1)[1])
+        except ValueError:
+            continue
+        if since <= day < run_date:
+            days.add(day)
+
+    pending = []
+    for day in sorted(days):
+        for country, role in expected_segments(day):
+            path = archive_path(country, role, day)
+            if (day, country, role) not in loaded and path.is_file() and path.stat().st_size > 0:
+                pending.append(day)
+                break
+    return pending
+
+
+def catch_up(run_date: date, lookback_days: int = CATCH_UP_DAYS) -> list[date]:
+    """Load archived days from the look-back window that PostgreSQL does not fully have.
+
+    Returns the days it loaded. A day with a missing or inconsistent archive is reported
+    and skipped, so one bad day never blocks the current run.
+    """
+    connection = get_connection()
+    try:
+        loaded = loaded_segments(connection, run_date - timedelta(days=lookback_days))
+    finally:
+        connection.close()
+
+    pending = dates_to_catch_up(run_date, loaded, lookback_days)
+    if not pending:
+        print(f"No earlier days to catch up (checked the last {lookback_days} days).")
+    caught_up = []
+    for day in pending:
+        print(f"\nCatching up {day}: its archives are on disk but not fully in PostgreSQL.")
+        try:
+            load_date(day)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"Warning: {day} was not loaded and needs a manual look. {exc}")
+            continue
+        caught_up.append(day)
+    return caught_up
 
 
 def parse_date(value: str) -> date:
