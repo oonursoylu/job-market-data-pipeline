@@ -1,5 +1,7 @@
 # Job Market Data Pipeline
 
+[![CI](https://github.com/oonursoylu/job-market-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/oonursoylu/job-market-data-pipeline/actions/workflows/ci.yml)
+
 I collect data-job adverts from Germany and the UK through the Adzuna API, keep every raw response, load them into PostgreSQL and model them with dbt. A Streamlit dashboard sits on top.
 
 I built it to see which skills appear in these adverts and how repeated postings distort the counts. Most of the work went into things a dashboard does not show: loads that can be rerun safely, adverts that turn up more than once, data quality checks and a few slow queries.
