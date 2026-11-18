@@ -14,7 +14,7 @@ These are the dbt models for the job market pipeline. The main [README](../READM
 | `seeds` | The skill dictionary, and the countries and search roles (with start dates) that the Python extractor and loader also read. |
 | `tests` | Singular tests for rules that generic tests cannot express, such as postings in one group matching the same skills, or the coverage table agreeing with the fact table. |
 
-The counting rules for reports are described on `fct_job_observations` in `models/marts/star/star_schema.yml`. Every intermediate and mart table is analysed right after it is built (`dbt_project.yml`), so later models in the same run are planned with real row counts.
+The counting rules for reports are described on `fct_job_observations` in `models/marts/star/star_schema.yml`. Every star-schema model has an enforced contract there: dbt checks each column's name and data type before it replaces a table, so the dashboard and Power BI never receive a changed table. Every intermediate and mart table is analysed right after it is built (`dbt_project.yml`), so later models in the same run are planned with real row counts.
 
 ## Run
 

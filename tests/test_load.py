@@ -2,6 +2,7 @@ import json
 import os
 from datetime import date
 
+import psycopg2.errors
 import pytest
 
 from src import config
@@ -70,7 +71,7 @@ def test_load_is_idempotent(connection):
 def test_a_failed_segment_leaves_nothing_behind(connection):
     broken = mapped("3")
     broken["search_country"] = None  # violates NOT NULL in both tables
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg2.errors.NotNullViolation):
         postgres_loader.load_segment(connection, [mapped("4"), broken])
     assert table_counts(connection) == (0, 0)
 

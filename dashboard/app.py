@@ -1,4 +1,5 @@
 import logging
+from datetime import date
 
 import pandas as pd
 import plotly.express as px
@@ -10,6 +11,9 @@ import queries
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+# Collection runs on Monday, Wednesday and Friday, so the normal gap is at most 3 days.
+# Older data means a run was missed or failed; dbt source freshness warns at the same age.
+STALE_AFTER_DAYS = 4
 PLOTLY_CONFIG = {
     "displayModeBar": False,
     "displaylogo": False,
@@ -36,6 +40,11 @@ def with_connection(read):
 @st.cache_data(ttl=300)
 def load_segments():
     return with_connection(queries.reporting_segments)
+
+
+@st.cache_data(ttl=300)
+def load_latest_collection_date():
+    return with_connection(queries.latest_collection_date)
 
 
 @st.cache_data(ttl=300)
@@ -82,6 +91,17 @@ st.title("Job Market Explorer")
 st.caption("Explore collected job adverts, skill mentions and repeated posting groups. "
            "Job data: [Adzuna](https://www.adzuna.co.uk).")
 segments = load(load_segments)
+latest_collection = load(load_latest_collection_date)
+if latest_collection is not None:
+    age_days = (date.today() - latest_collection).days
+    age_text = "today" if age_days == 0 else "1 day ago" if age_days == 1 else f"{age_days} days ago"
+    if age_days > STALE_AFTER_DAYS:
+        st.warning(
+            f"The latest collection is from {latest_collection} ({age_text}). Collection runs on Monday, "
+            "Wednesday and Friday, so a run was probably missed or failed. See logs/pipeline_YYYY-MM-DD.log."
+        )
+    else:
+        st.caption(f"Latest collection: {latest_collection} ({age_text}).")
 country_names = dict(segments[["search_country", "country_name"]].drop_duplicates().itertuples(index=False, name=None))
 role_names = dict(segments[["search_role", "role_name"]].drop_duplicates().itertuples(index=False, name=None))
 with st.sidebar:
@@ -213,7 +233,7 @@ with skills_tab:
             top_skill_figure.update_xaxes(rangemode="tozero", ticksuffix="%")
             st.plotly_chart(top_skill_figure, width="stretch", config=PLOTLY_CONFIG)
         columns = ["Skill", "Group-days with mention", "Share of observed group-days (%)", "Average groups per observed day"]
-        labels = dict(zip(summary.skill, summary.Skill))
+        labels = dict(zip(summary.skill, summary.Skill, strict=True))
         with st.expander("Build a personal skill watchlist"):
             watched = st.multiselect("Choose skills", sorted(labels, key=lambda skill: labels[skill].casefold()),
                 default=[s for s in ["databricks", "microsoft fabric", "power bi", "dbt", "spark", "a/b testing"] if s in labels],

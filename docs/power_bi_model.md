@@ -43,6 +43,7 @@ Model settings:
 - Sort by column: `dim_date[month_label]` by `year_month_number`, `dim_segments[segment_name]` by `segment_sort_order`, `country_name` by `country_sort_order`, `role_name` by `role_sort_order`.
 - Add a report-level filter `dim_segments[is_reporting_segment] = True`.
 - Hide key columns (`*_key`, `*_id`) from report view.
+- Column descriptions are in dbt (`dbt docs generate --project-dir .\dbt_job_market`); the contracts in `star_schema.yml` fix every column's name and type.
 
 ## 3. Measures
 

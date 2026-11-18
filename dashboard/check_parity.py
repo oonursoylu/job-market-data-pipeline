@@ -214,8 +214,8 @@ def compare_skills(checks, context, old, new):
                            "share_of_observed_group_days", "average_groups_per_observed_day"]))
     old_cells = sorted(
         (day, skill, count)
-        for day, values in zip(old_daily.index, old_daily.to_numpy().tolist())
-        for skill, count in zip(old_daily.columns, values)
+        for day, values in zip(old_daily.index, old_daily.to_numpy().tolist(), strict=True)
+        for skill, count in zip(old_daily.columns, values, strict=True)
     )
     checks.expect("daily skill counts", context, old_cells,
         sorted(rows(new_daily, ["extract_date", "skill", "groups_with_mention"])))

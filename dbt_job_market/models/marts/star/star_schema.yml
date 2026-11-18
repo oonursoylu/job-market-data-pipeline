@@ -1,73 +1,116 @@
 version: 2
 
+# The dashboard and the Power BI report read these tables, so each one has a contract:
+# dbt checks every column name and data type before it replaces the table, and the build
+# fails instead of handing a changed table to a report.
 models:
   - name: dim_segments
     description: "Country and search-role segments with display names and sort order. Only segments with is_reporting_segment are shown in reporting."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: segment_id
+        data_type: text
         description: "Segment key: search_country and search_role joined with a pipe."
         data_tests:
           - not_null
           - unique
       - name: search_country
+        data_type: text
         description: "Country code used in the search request."
         data_tests:
           - not_null
+      - name: country_name
+        data_type: text
+        description: "Display name of the country, for example Germany."
+      - name: country_sort_order
+        data_type: integer
+        description: "Sort order for country_name."
       - name: search_role
+        data_type: text
         description: "Role keyword group used in the search request."
         data_tests:
           - not_null
+      - name: role_name
+        data_type: text
+        description: "Display name of the search role, for example Data Engineer."
+      - name: role_sort_order
+        data_type: integer
+        description: "Sort order for role_name."
       - name: segment_name
+        data_type: text
         description: "Display name, for example Germany / Data Engineer."
         data_tests:
           - not_null
           - unique
       - name: segment_sort_order
+        data_type: bigint
         description: "Sort order for segment_name: countries first, then roles. Use it as the Sort by column in BI tools."
         data_tests:
           - not_null
           - unique
       - name: is_reporting_segment
+        data_type: boolean
         description: "False for segments that are collected but not reported yet."
         data_tests:
           - not_null
       - name: collection_start_date
+        data_type: date
         description: "First date the segment was collected: the later of its country and role start dates."
         data_tests:
           - not_null
 
   - name: dim_skills
     description: "Tracked skills with display labels, categories and the aliases used for matching."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: skill
+        data_type: text
         description: "Normalised skill name from the skill dictionary."
         data_tests:
           - not_null
           - unique
       - name: skill_label
+        data_type: text
         description: "Display label shared by the dashboard and BI tools."
         data_tests:
           - not_null
           - unique
       - name: category
+        data_type: text
         description: "High-level skill category."
         data_tests:
           - not_null
+      - name: match_aliases
+        data_type: text
+        description: "Pipe-separated phrases that count as a mention of the skill, in normalised form."
 
   - name: dim_job_postings
     description: "One row per source posting with its analytical group and quality flags."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: job_posting_key
+        data_type: text
         description: "Hash of source and job_id, a single-column key for BI relationships."
         data_tests:
           - not_null
           - unique
+      - name: source
+        data_type: text
+        description: "Source system for the posting."
       - name: job_id
+        data_type: text
         description: "Job identifier from the source system."
         data_tests:
           - not_null
           - unique
       - name: posting_group_id
+        data_type: text
         description: "Analytical group of the posting; key to dim_posting_groups. Groups are not verified unique vacancies."
         data_tests:
           - not_null
@@ -75,49 +118,100 @@ models:
               arguments:
                 to: ref('dim_posting_groups')
                 field: posting_group_id
+      - name: job_title
+        data_type: text
+        description: "Job title from the posting."
+      - name: company_name
+        data_type: text
+        description: "Company name, shown as Unknown when the source has none."
+      - name: company_name_was_missing
+        data_type: boolean
+        description: "True when the source did not provide a usable company name."
+      - name: location
+        data_type: text
+        description: "Display location from the posting."
+      - name: posted_date
+        data_type: date
+        description: "Date the source says the advert was created, when available."
+      - name: is_training_or_placement
+        data_type: boolean
+        description: "Title-based flag for training, internship, working student, apprenticeship, dual study, thesis or placement adverts."
+      - name: description_is_likely_truncated
+        data_type: boolean
+        description: "True when the source snippet reaches the observed 500-character boundary."
+      - name: salary_is_available
+        data_type: boolean
+        description: "True when at least one positive salary bound is available."
+      - name: salary_currency_was_inferred
+        data_type: boolean
+        description: "True when the salary currency was inferred from the search country."
+      - name: currency
+        data_type: text
+        description: "Currency of usable salary data, from the source or inferred from the search country."
+      - name: redirect_url
+        data_type: text
+        description: "Source link to the advert. A working link does not prove the vacancy is open."
+      - name: first_catalog_date
+        data_type: date
+        description: "Date the posting first entered the raw catalogue."
 
   - name: dim_posting_groups
-    description: >
-      One row per analytical posting group. Relates fct_job_observations and bridge_posting_group_skills
-      through a unique key, so BI tools do not need a many-to-many relationship. Groups are not verified unique vacancies.
+    description: "One row per analytical posting group. Relates fct_job_observations and bridge_posting_group_skills through a unique key, so BI tools do not need a many-to-many relationship. Groups are not verified unique vacancies."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: posting_group_id
+        data_type: text
         description: "Analytical group key."
         data_tests:
           - not_null
           - unique
+      - name: source
+        data_type: text
+        description: "Source system of the group's postings."
+      - name: search_country
+        data_type: text
+        description: "Country code of the group; groups never span countries."
       - name: company_name
+        data_type: text
         description: "Company shown for the group. Members share the normalised company name."
         data_tests:
           - not_null
+      - name: company_name_was_missing
+        data_type: boolean
+        description: "True when the group's company was missing at source. Such groups hold one posting."
       - name: job_title
+        data_type: text
         description: "Title shown for the group. Members share the normalised title."
       - name: member_posting_count
+        data_type: bigint
         description: "Source postings in the group across the whole catalogue, not in one snapshot."
         data_tests:
           - not_null
       - name: location_count
+        data_type: bigint
         description: "Distinct locations of the group's source postings across the whole catalogue."
       - name: first_catalog_date
+        data_type: date
         description: "Date the first member posting entered the raw catalogue."
         data_tests:
           - not_null
 
   - name: fct_job_observations
-    description: >
-      One row per observation: a posting seen in one country and role search on one date.
-      Source postings are counted as distinct job_posting_key and analytical groups as distinct posting_group_id.
-      A skill share over a period is the sum, over included dates, of groups with a mention divided by the sum of observed groups.
-      Because a group counts once per date across the selected roles, that sum equals the distinct count of group_day_key.
-      A date is included only when every selected segment has observations on it (see fct_segment_coverage);
-      uncollected dates are never counted as zero.
+    description: "One row per observation: a posting seen in one country and role search on one date. Source postings are counted as distinct job_posting_key and analytical groups as distinct posting_group_id. A skill share over a period is the sum, over included dates, of groups with a mention divided by the sum of observed groups. Because a group counts once per date across the selected roles, that sum equals the distinct count of group_day_key. A date is included only when every selected segment has observations on it (see fct_segment_coverage); uncollected dates are never counted as zero."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: observation_id
+        data_type: text
         description: "Observation key from the staging model."
         data_tests:
           - not_null
           - unique
       - name: job_posting_key
+        data_type: text
         description: "Key to dim_job_postings."
         data_tests:
           - not_null
@@ -126,6 +220,7 @@ models:
                 to: ref('dim_job_postings')
                 field: job_posting_key
       - name: segment_id
+        data_type: text
         description: "Key to dim_segments."
         data_tests:
           - not_null
@@ -134,6 +229,7 @@ models:
                 to: ref('dim_segments')
                 field: segment_id
       - name: posting_group_id
+        data_type: text
         description: "Analytical group of the observed posting; key to dim_posting_groups."
         data_tests:
           - not_null
@@ -142,10 +238,24 @@ models:
                 to: ref('dim_posting_groups')
                 field: posting_group_id
       - name: group_day_key
+        data_type: text
         description: "posting_group_id and extract_date joined with a pipe. A distinct count over the selected rows gives group-days."
         data_tests:
           - not_null
+      - name: source
+        data_type: text
+        description: "Source system for the observed posting."
+      - name: job_id
+        data_type: text
+        description: "Job identifier from the source system."
+      - name: search_country
+        data_type: text
+        description: "Country code used in the search request."
+      - name: search_role
+        data_type: text
+        description: "Role keyword group used in the search request."
       - name: extract_date
+        data_type: date
         description: "Date the batch pipeline observed the posting; key to dim_date."
         data_tests:
           - not_null
@@ -154,21 +264,28 @@ models:
                 to: ref('dim_date')
                 field: date_day
       - name: posting_age_days
+        data_type: integer
         description: "Days between the source posting date and the observation date, floored at zero. A quality signal, not proof of closure."
       - name: is_stale_at_observation
+        data_type: boolean
         description: "True when the posting was more than 90 days old at this observation."
         data_tests:
           - not_null
 
   - name: bridge_posting_group_skills
     description: "Skills matched by each analytical group. A group counts once per skill, however many aliases or members match."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: posting_group_skill_id
+        data_type: text
         description: "Hash of posting_group_id and skill."
         data_tests:
           - not_null
           - unique
       - name: posting_group_id
+        data_type: text
         description: "Analytical group with a skill mention; key to dim_posting_groups."
         data_tests:
           - not_null
@@ -177,6 +294,7 @@ models:
                 to: ref('dim_posting_groups')
                 field: posting_group_id
       - name: skill
+        data_type: text
         description: "Matched skill; key to dim_skills."
         data_tests:
           - not_null
@@ -186,17 +304,19 @@ models:
                 field: skill
 
   - name: fct_segment_coverage
-    description: >
-      One row per segment and date with observations, with the postings and groups observed.
-      Use it to find the dates on which every selected segment was collected. It is not linked
-      to skills, so skill filters do not change which dates are included.
+    description: "One row per segment and date with observations, with the postings and groups observed. Use it to find the dates on which every selected segment was collected. It is not linked to skills, so skill filters do not change which dates are included."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: segment_date_id
+        data_type: text
         description: "segment_id and extract_date joined with a pipe."
         data_tests:
           - not_null
           - unique
       - name: segment_id
+        data_type: text
         description: "Key to dim_segments."
         data_tests:
           - not_null
@@ -204,7 +324,14 @@ models:
               arguments:
                 to: ref('dim_segments')
                 field: segment_id
+      - name: search_country
+        data_type: text
+        description: "Country code of the segment."
+      - name: search_role
+        data_type: text
+        description: "Search role of the segment."
       - name: extract_date
+        data_type: date
         description: "Observation date; key to dim_date."
         data_tests:
           - not_null
@@ -213,34 +340,68 @@ models:
                 to: ref('dim_date')
                 field: date_day
       - name: observed_postings
+        data_type: bigint
         description: "Distinct source postings observed in the segment on the date."
         data_tests:
           - not_null
       - name: observed_groups
+        data_type: bigint
         description: "Distinct analytical groups observed in the segment on the date."
         data_tests:
           - not_null
 
   - name: dim_date
-    description: >
-      Calendar with one row per day for every full year that has observations, for use as a
-      marked date table in BI tools. is_collection_date is false on days without collection;
-      those days are missing data, not zero demand.
+    description: "Calendar with one row per day for every full year that has observations, for use as a marked date table in BI tools. is_collection_date is false on days without collection; those days are missing data, not zero demand."
+    config:
+      contract:
+        enforced: true
     columns:
       - name: date_day
+        data_type: date
         description: "Calendar date."
         data_tests:
           - not_null
           - unique
+      - name: year_number
+        data_type: integer
+        description: "Calendar year."
+      - name: quarter_number
+        data_type: integer
+        description: "Calendar quarter, 1 to 4."
+      - name: quarter_label
+        data_type: text
+        description: "Quarter label, for example Q4."
+      - name: month_number
+        data_type: integer
+        description: "Calendar month, 1 to 12."
+      - name: month_name
+        data_type: text
+        description: "Month name, for example November."
       - name: month_label
+        data_type: text
         description: "Short month and year, for example Nov 2026. Sort by year_month_number."
       - name: year_month_number
+        data_type: integer
         description: "Year times 100 plus month, the sort column for month_label."
+      - name: week_start_date
+        data_type: date
+        description: "Monday of the date's week."
+      - name: iso_day_of_week
+        data_type: integer
+        description: "ISO day of week: 1 is Monday, 7 is Sunday."
+      - name: day_name
+        data_type: text
+        description: "Day name, for example Wednesday."
+      - name: is_weekend
+        data_type: boolean
+        description: "True on Saturday and Sunday."
       - name: is_collection_date
+        data_type: boolean
         description: "True when at least one segment was collected on the day."
         data_tests:
           - not_null
       - name: collected_segments
+        data_type: bigint
         description: "Number of country and role segments with observations on the day."
         data_tests:
           - not_null

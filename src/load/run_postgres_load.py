@@ -27,8 +27,9 @@ def status_is_valid(status: dict, path: Path, records: list[dict], country: str,
     requested = status.get("requested_pages")
     boundary = status.get("description_truncation_boundary")
     has_valid_boundary = isinstance(boundary, int) and boundary > 0
+    total_count = status.get("api_total_count")
     return (
-        version in (1, 2)
+        version in (1, 2, 3)
         and status.get("status") == "complete"
         and status.get("country") == country
         and status.get("search_role") == role
@@ -41,6 +42,8 @@ def status_is_valid(status: dict, path: Path, records: list[dict], country: str,
         and sum(item["records"] for item in pages) == len(records)
         and status.get("total_records") == len(records)
         and status.get("sha256") == hashlib.sha256(path.read_bytes()).hexdigest()
+        # Version 3 also records the API's total match count, which may be missing (null).
+        and (version < 3 or total_count is None or (isinstance(total_count, int) and total_count >= 0))
         and (
             version == 1
             or (

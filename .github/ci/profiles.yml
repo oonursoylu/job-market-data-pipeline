@@ -1,0 +1,14 @@
+# dbt profile used only by the GitHub Actions workflow. Connection details come from the
+# environment variables set in .github/workflows/ci.yml (a throwaway PostgreSQL service).
+dbt_job_market:
+  target: ci
+  outputs:
+    ci:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST') }}"
+      port: "{{ env_var('POSTGRES_PORT') | as_number }}"
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_DB') }}"
+      schema: analytics
+      threads: 4

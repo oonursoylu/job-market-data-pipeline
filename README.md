@@ -10,8 +10,8 @@ I built it to see which skills appear in these adverts and how repeated postings
 
 - A batch pipeline that archives the raw API responses and records every date an advert appears in a search. One command runs extraction, loading and dbt, and a Windows scheduled task runs it every Monday, Wednesday and Friday.
 - Archive validation and repeatable loading, so rerunning a load never inserts the same record twice. Each segment is written in a single transaction.
-- Thirteen dbt models, three seeds and 169 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency, plus Python tests for extraction and loading.
-- A star schema for reporting: one fact table of observations, dimension tables for dates, postings, posting groups, segments and skills, a bridge table that links posting groups to skills, and a coverage table that BI tools use for the date rule.
+- Thirteen dbt models, three seeds and 169 data tests covering missing values, cleaning rules, uniqueness, relationships and count consistency, plus Python tests for extraction and loading. GitHub Actions runs the tests, the whole pipeline and dbt on invented data on every push.
+- A star schema for reporting: one fact table of observations, dimension tables for dates, postings, posting groups, segments and skills, a bridge table that links posting groups to skills, and a coverage table that BI tools use for the date rule. Every column is documented, and dbt contracts stop the build if a column name or type changes, before the dashboard or a report sees it.
 - A Streamlit dashboard for comparing skill mentions, browsing adverts and looking at repeated posting groups. Every number in it comes from SQL on the star schema.
 - SQL performance work, with every faster version checked against the original output (details below).
 
@@ -19,7 +19,7 @@ The reporting covers four searches in both countries: Data Engineer, Analytics E
 
 ## Dashboard
 
-The Overview tab compares source postings with analytical groups for the selected date and shows the most mentioned skills. Country and role filters narrow the sample. All four roles are selected when it opens. Since Data Analyst collection started later, skill figures over several days only use dates from 6 September 2026 while that role is selected.
+The Overview tab compares source postings with analytical groups for the selected date and shows the most mentioned skills. Country and role filters narrow the sample. All four roles are selected when it opens. Since Data Analyst collection started later, skill figures over several days only use dates from 6 September 2026 while that role is selected. The page shows the latest collection date and turns it into a warning when the data is more than four days old, which means a scheduled run was missed or failed.
 
 ![Overview tab of the dashboard](docs/screenshots/dashboard_overview.png)
 
@@ -46,7 +46,7 @@ flowchart LR
     G --> H[dbt star schema]
     S --> H
     H --> I[Streamlit dashboard]
-    H --> P[Power BI report]
+    H -.-> P["Power BI report (planned)"]
 ```
 
 `python -m src.run_pipeline` runs the steps in order and stops at the first failure, so a bad extraction never reaches the database and a failed load never reaches dbt.
@@ -125,10 +125,10 @@ data/raw/adzuna/country=XX/search_role=ROLE/date=YYYY-MM-DD/
   extraction_status.json
 ```
 
-- An existing archive or status file blocks another extraction for that segment and date.
+- An existing archive or status file blocks another extraction for that segment and date. The scheduled run resumes instead: it skips complete segments and retries failed or stale ones (see [Scheduled run](#scheduled-run)).
 - JSONL is written to a temporary file first and never replaces an existing archive.
-- Status files record the requested pages, records per page, completion status, description coverage and an archive checksum.
-- The loader validates all eight expected archives before it loads any segment.
+- Status files record the requested pages, records per page, completion status, description coverage and an archive checksum. From version 3 (18 November 2026) they also keep the total number of matching adverts Adzuna reports for each search. The archive keeps at most 150 of them, so the total is the only measure of volume; it is not loaded into PostgreSQL yet.
+- The loader validates every archive expected for the date (eight since 6 September 2026) before it loads any segment.
 - Older archives without a status file are accepted with a warning, because their page completion cannot be verified.
 - Database constraints and `ON CONFLICT DO NOTHING` stop repeated postings and observations from being inserted again.
 - Each segment's postings and observations are written in one transaction, so a segment is either fully loaded or not at all. If the database fails midway, earlier segments stay loaded, and a rerun completes the rest safely. A test forces the second insert to fail and checks that nothing is left behind.
@@ -205,12 +205,20 @@ dbt build --project-dir .\dbt_job_market
 python -m streamlit run dashboard\app.py
 ```
 
-Python tests: `python -m pytest`. The four database tests run when `JOB_MARKET_TEST_DATABASE` names an empty test database.
+Python tests: `python -m pytest`. The four database tests run when `JOB_MARKET_TEST_DATABASE` names an empty test database. Lint: `ruff check src tests dashboard` (rules in `ruff.toml`).
+
+[GitHub Actions](.github/workflows/ci.yml) repeats this on every push with a throwaway PostgreSQL 18: lint, all Python tests, then invented archives written through the real extractor, a full pipeline run with catch-up and `dbt build`, both parity checks and a headless dashboard test. The invented adverts in [tests/sample_data.py](tests/sample_data.py) cover repeated postings, missing companies, German text, training titles and salary placeholders; none of them come from Adzuna.
 
 To compare the dashboard queries with the earlier pandas logic after a dbt build (this takes a few minutes):
 
 ```powershell
 python dashboard\check_parity.py
+```
+
+To check that the columns added for Power BI give the dashboard's skill figures:
+
+```powershell
+python dashboard\check_bi_model.py
 ```
 
 To validate or replay an archived date without fetching again:
@@ -231,7 +239,9 @@ Adzuna is one source with a capped sample. Collection was manual until 18 Novemb
 ## Next steps
 
 1. A Power BI report on the star schema that uses the same counting rules as the dashboard. The model, relationships and DAX measures are planned in [docs/power_bi_model.md](docs/power_bi_model.md), and `dashboard/check_bi_model.py` already checks the rules in SQL.
-2. Later: a Docker setup and CI checks that run the Python tests and `dbt build`.
+2. Load Adzuna's total match counts into PostgreSQL, so reports can show volume as well as skills.
+3. A second copy of the raw archives outside this laptop. The database can be rebuilt from them, but they cannot be collected again.
+4. Later: a Docker setup.
 
 Secrets, raw archives, backups, logs, virtual environments and generated dbt artifacts are excluded from Git.
 

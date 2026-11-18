@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+
+    # A throwaway PostgreSQL for this run only. The password is not a secret.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: job_market_user
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: job_market
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U job_market_user -d job_market"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: job_market
+      POSTGRES_USER: job_market_user
+      POSTGRES_PASSWORD: ci_only_password
+      JOB_MARKET_TEST_DATABASE: job_market_test
+      DBT_PROFILES_DIR: ${{ github.workspace }}/.github/ci
+      DO_NOT_TRACK: "1"
+      PYTHONIOENCODING: utf-8
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check src tests dashboard
+
+      - name: Create the test database
+        run: >-
+          python -c "import psycopg2; c = psycopg2.connect(host='localhost', dbname='job_market',
+          user='job_market_user', password='ci_only_password'); c.autocommit = True;
+          c.cursor().execute('CREATE DATABASE job_market_test')"
+
+      - name: Python tests, including the database tests
+        run: python -m pytest
+
+      - name: Write invented archives through the real extractor
+        run: python -m tests.sample_data
+
+      - name: Run the pipeline (catch-up, load, dbt freshness and build)
+        run: python -m src.run_pipeline --date 2026-11-18
+
+      - name: Check the Power BI counting rules and dashboard parity
+        run: |
+          python dashboard/check_bi_model.py
+          python dashboard/check_parity.py
+
+      - name: Dashboard smoke test
+        run: python -m tests.dashboard_smoke

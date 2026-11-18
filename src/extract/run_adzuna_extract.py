@@ -105,8 +105,10 @@ def run_extract(
     archive = archive_path(country, search_role, extract_date)
     status_file = status_path(country, search_role, extract_date)
     archive.parent.mkdir(parents=True, exist_ok=True)
+    # Version 3 adds the total number of matching adverts Adzuna reports for the search
+    # (api_total_count). The archive keeps at most 150 of them; the total shows volume.
     status = {
-        "version": 2, "status": "in_progress", "country": country,
+        "version": 3, "status": "in_progress", "country": country,
         "search_role": search_role, "extract_date": extract_date.isoformat(),
         "requested_pages": max_pages, "results_per_page": results_per_page,
         "description_contract": DESCRIPTION_CONTRACT,
@@ -138,7 +140,12 @@ def run_extract(
             if any(not isinstance(job, dict) or not job.get("id") for job in jobs):
                 raise ValueError("Invalid API record: missing job id.")
             all_jobs.extend(jobs)
-            status["pages"].append({"page": page, "records": len(jobs)})
+            total_count = data.get("count")
+            if not isinstance(total_count, int) or isinstance(total_count, bool):
+                total_count = None
+            status["pages"].append({"page": page, "records": len(jobs), "total_count": total_count})
+            if page == 1:
+                status["api_total_count"] = total_count
             save_status()
             print(f"Page {page}: fetched {len(jobs)} jobs")
 
@@ -162,7 +169,9 @@ def run_extract(
         save_status()
         print(f"Extraction complete: {country}/{search_role}, {len(all_jobs)} records.")
         return len(all_jobs)
-    except Exception as exc:
+    except BaseException as exc:
+        # BaseException also covers Ctrl+C, so a stopped run is marked failed and can be
+        # retried at once instead of staying "in_progress" until it counts as stale.
         status["status"] = "failed"
         # Do not store API URLs or credentials from exception messages.
         status["error_type"] = type(exc).__name__

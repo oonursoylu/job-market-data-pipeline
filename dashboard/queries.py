@@ -101,6 +101,12 @@ def reporting_segments(connection):
     """)
 
 
+def latest_collection_date(connection):
+    # Latest date with any observation, across all segments, for the freshness notice.
+    frame = read_frame(connection, "select max(extract_date) as latest from analytics.fct_job_observations")
+    return frame.latest.iloc[0]
+
+
 def observed_dates(connection, countries, roles):
     frame = read_frame(connection, f"""
         with {SCOPE}

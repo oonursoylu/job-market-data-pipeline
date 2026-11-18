@@ -31,10 +31,13 @@ class FakeSession:
     def get(self, url, params=None, timeout=None):
         self.calls.append((url, params))
         response = self.responses.pop(0)
-        if isinstance(response, Exception):
+        if isinstance(response, BaseException):
             raise response
         return response
 
 
-def page(ids, description="Example snippet"):
-    return FakeResponse(200, {"results": [{"id": str(i), "title": "Data Engineer", "description": description} for i in ids]})
+def page(ids, description="Example snippet", count=None):
+    payload = {"results": [{"id": str(i), "title": "Data Engineer", "description": description} for i in ids]}
+    if count is not None:
+        payload["count"] = count
+    return FakeResponse(200, payload)

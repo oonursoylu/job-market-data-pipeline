@@ -114,3 +114,28 @@ def test_resume_keeps_stale_and_failed_statuses_and_collects_again(raw_dir, monk
     assert len(list(failed_folder.glob("extraction_status.failed-*.json"))) == 1
     assert extract.segment_state("gb", "data_engineer", DAY) == "complete"
     assert extract.segment_state("gb", "analytics_engineer", DAY) == "complete"
+
+
+def test_ctrl_c_marks_the_segment_failed_so_it_can_be_retried(raw_dir):
+    with pytest.raises(KeyboardInterrupt):
+        run(FakeSession([page([1]), KeyboardInterrupt()]))
+    status = json.loads(config.status_path("gb", "data_engineer", DAY).read_text())
+    assert status["status"] == "failed"
+    assert status["error_type"] == "KeyboardInterrupt"
+    assert extract.segment_state("gb", "data_engineer", DAY) == "failed"
+
+
+def test_status_keeps_the_total_count_reported_by_the_api(raw_dir):
+    run(FakeSession([page([1, 2], count=4321), page([3], count=4320)]))
+    status = json.loads(config.status_path("gb", "data_engineer", DAY).read_text())
+    assert status["version"] == 3
+    assert status["api_total_count"] == 4321
+    assert [item["total_count"] for item in status["pages"]] == [4321, 4320]
+    assert len(validate_archive("gb", "data_engineer", DAY)) == 3
+
+
+def test_a_missing_total_count_is_stored_as_null_and_still_loads(raw_dir):
+    run(FakeSession([page([1]), page([2])]))
+    status = json.loads(config.status_path("gb", "data_engineer", DAY).read_text())
+    assert status["api_total_count"] is None
+    assert len(validate_archive("gb", "data_engineer", DAY)) == 2
